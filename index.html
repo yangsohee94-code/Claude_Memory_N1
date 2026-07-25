@@ -373,6 +373,9 @@
     <p>Google 로그인 후 NotebookLM 노트북 목록을 확인하세요.</p>
   </div>
 
+  <div id="error-box" style="display:none; margin-top:16px; padding:16px 20px; background:#fce8e6; border:1px solid #f28b82; border-radius:10px; color:#c5221f; font-size:13px; line-height:1.6;"></div>
+  <div id="guide-box" style="display:none; margin-top:16px; padding:16px 20px; background:#e8f0fe; border:1px solid #4285f4; border-radius:10px; font-size:13px; line-height:1.8;"></div>
+
   <div id="notebook-section" style="display:none;">
     <div class="toolbar">
       <div class="search-box">
@@ -417,9 +420,27 @@
       client_id: clientId,
       scope: SCOPES,
       callback: (resp) => {
-        if (resp.error) { showError(resp.error); return; }
+        if (resp.error) {
+          if (resp.error === 'access_denied') {
+            showErrorBox('Google 로그인을 취소했습니다. 다시 시도하려면 로그인 버튼을 클릭하세요.');
+          } else if (resp.error === 'popup_blocked_by_browser') {
+            showErrorBox('팝업이 차단되었습니다. 주소창 오른쪽의 <strong>팝업 허용</strong> 버튼을 클릭한 후 다시 시도하세요.');
+          } else if (resp.error === 'idpiframe_initialization_failed') {
+            showErrorBox(`OAuth 초기화 실패. <strong>Google Cloud Console</strong>에서 아래 URL을 <strong>승인된 자바스크립트 원본</strong>에 추가했는지 확인하세요:<br>
+              <code>${location.origin}</code>`);
+          } else {
+            showErrorBox(`인증 오류: ${resp.error}<br>
+              현재 주소 <code>${location.origin}</code>이 Google Cloud Console의 <strong>승인된 자바스크립트 원본</strong>에 등록되어 있는지 확인하세요.`);
+          }
+          return;
+        }
+        hideBoxes();
         localStorage.setItem(LS_TOKEN_KEY, resp.access_token);
         onSignedIn(resp.access_token);
+      },
+      error_callback: (err) => {
+        showErrorBox(`OAuth 오류: ${err.type || JSON.stringify(err)}<br>
+          현재 주소 <code>${location.origin}</code>이 Google Cloud Console의 <strong>승인된 자바스크립트 원본</strong>에 등록되어 있는지 확인하세요.`);
       },
     });
   }
@@ -540,19 +561,49 @@
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  function showErrorBox(msg) {
+    const el = document.getElementById('error-box');
+    el.innerHTML = `<strong>❌ 오류:</strong> ${msg}`;
+    el.style.display = 'block';
+  }
+
+  function showGuide(html) {
+    const el = document.getElementById('guide-box');
+    el.innerHTML = html;
+    el.style.display = 'block';
+  }
+
+  function hideBoxes() {
+    document.getElementById('error-box').style.display = 'none';
+    document.getElementById('guide-box').style.display = 'none';
+  }
+
   window.onload = () => {
     const clientId = getClientId();
-    if (clientId) {
-      document.getElementById('setup-banner').style.display = 'none';
-      document.getElementById('input-client-id').value = clientId;
-    }
+    document.getElementById('setup-banner').style.display = 'none';
+    document.getElementById('input-client-id').value = clientId;
+
+    showGuide(`⏳ Google 인증 라이브러리 로드 중... (인터넷 연결 확인)
+      <br>로드 후 <strong>Google 로그인</strong> 버튼이 활성화됩니다.`);
 
     const script = document.createElement('script');
     script.src = 'https://accounts.google.com/gsi/client';
     script.onload = () => {
-      if (clientId) initGoogleClient();
+      hideBoxes();
+      initGoogleClient();
       const token = localStorage.getItem(LS_TOKEN_KEY);
-      if (token) onSignedIn(token);
+      if (token) {
+        onSignedIn(token);
+      } else {
+        showGuide(`✅ 준비 완료! <strong>Google 로그인</strong> 버튼을 클릭하세요.<br>
+          <small style="color:#5f6368">※ 팝업 차단이 되어 있다면 주소창 오른쪽의 팝업 허용 버튼을 클릭하세요.</small>`);
+      }
+    };
+    script.onerror = () => {
+      showErrorBox(`Google 인증 라이브러리를 불러올 수 없습니다.<br>
+        • 인터넷 연결을 확인하세요.<br>
+        • <code>file://</code> 로 열면 작동하지 않습니다. 반드시 <code>http://localhost:포트</code> 로 접속하세요.<br>
+        • 브라우저 확장 프로그램(광고 차단기 등)이 차단하는 경우 비활성화 후 시도하세요.`);
     };
     document.head.appendChild(script);
   };
