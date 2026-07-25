@@ -356,7 +356,7 @@
   <h1 class="page-title">내 노트북</h1>
   <p class="page-subtitle">Google Drive에 저장된 NotebookLM 노트북 목록입니다.</p>
 
-  <div class="setup-banner" id="setup-banner">
+  <div class="setup-banner" id="setup-banner" style="display:none">
     <h3>⚙️ Google OAuth 클라이언트 ID 설정</h3>
     <p>
       Google Cloud Console에서 OAuth 2.0 클라이언트 ID를 생성한 후 아래에 입력하세요.<br>
@@ -390,6 +390,7 @@
   const NOTEBOOKLM_APP_ID = '720312581700';
   const NOTEBOOKLM_MIME = `application/vnd.google-apps.drive-sdk.${NOTEBOOKLM_APP_ID}`;
   const SCOPES = 'https://www.googleapis.com/auth/drive.readonly';
+  const DEFAULT_CLIENT_ID = '279919861598-bf9tprceobbrka02d6dor89ee1dq6r4a.apps.googleusercontent.com';
   const LS_CLIENT_KEY = 'nlm_client_id';
   const LS_TOKEN_KEY = 'nlm_access_token';
 
@@ -397,7 +398,7 @@
   let tokenClient = null;
 
   function getClientId() {
-    return localStorage.getItem(LS_CLIENT_KEY) || '';
+    return localStorage.getItem(LS_CLIENT_KEY) || DEFAULT_CLIENT_ID;
   }
 
   function saveClientId() {
