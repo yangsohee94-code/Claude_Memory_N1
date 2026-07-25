@@ -1,0 +1,68 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Sensitive/Private
+.notebooklm-mcp-cli/
+.ssh/
+.aws/
+.config/secrets
+credentials/
+
+# OS generated files
+.history/
+.cache/
+
+# Application specific
+.local/lib/
+.local/share/
+.local/state/
+
+# Temporary
+*.tmp
+*.temp
+.tmp/
+tmp/

@@ -1,0 +1,66 @@
+{"display":"Code","pastedContents":{},"timestamp":1784973798237,"project":"/Users/sohee","sessionId":"d5dffa38-92a0-4386-a89f-bd9e3f5057e2"}
+{"display":"/login","pastedContents":{},"timestamp":1784973845468,"project":"/Users/sohee","sessionId":"d5dffa38-92a0-4386-a89f-bd9e3f5057e2"}
+{"display":"❯ 내 NotebookLM 목록 보여줘","pastedContents":{},"timestamp":1784973912582,"project":"/Users/sohee","sessionId":"d5dffa38-92a0-4386-a89f-bd9e3f5057e2"}
+{"display":"/login","pastedContents":{},"timestamp":1784973939485,"project":"/Users/sohee","sessionId":"d5dffa38-92a0-4386-a89f-bd9e3f5057e2"}
+{"display":"❯ 내 NotebookLM 목록 보여줘","pastedContents":{},"timestamp":1784973953428,"project":"/Users/sohee","sessionId":"d5dffa38-92a0-4386-a89f-bd9e3f5057e2"}
+{"display":"/model","pastedContents":{},"timestamp":1784974003649,"project":"/Users/sohee","sessionId":"d5dffa38-92a0-4386-a89f-bd9e3f5057e2"}
+{"display":"❯ context! sudo chown -R 501:20 ~/.npm","pastedContents":{},"timestamp":1784974054896,"project":"/Users/sohee","sessionId":"d5dffa38-92a0-4386-a89f-bd9e3f5057e2"}
+{"display":"sudo rm -rf ~/.npm ~/.npmrc","pastedContents":{},"timestamp":1784974158697,"project":"/Users/sohee","sessionId":"d5dffa38-92a0-4386-a89f-bd9e3f5057e2"}
+{"display":"! brew reinstall node","pastedContents":{},"timestamp":1784974204813,"project":"/Users/sohee","sessionId":"31868e6a-fdfe-4442-a5f4-b3bd72851bd2"}
+{"display":"1","pastedContents":{},"timestamp":1784974230286,"project":"/Users/sohee","sessionId":"31868e6a-fdfe-4442-a5f4-b3bd72851bd2"}
+{"display":"0000","pastedContents":{},"timestamp":1784974257762,"project":"/Users/sohee","sessionId":"31868e6a-fdfe-4442-a5f4-b3bd72851bd2"}
+{"display":"NotebookLM 목록 보여줘","pastedContents":{},"timestamp":1784974300614,"project":"/Users/sohee","sessionId":"31868e6a-fdfe-4442-a5f4-b3bd72851bd2"}
+{"display":"go ahead","pastedContents":{},"timestamp":1784974356552,"project":"/Users/sohee","sessionId":"31868e6a-fdfe-4442-a5f4-b3bd72851bd2"}
+{"display":" Have you installed Homebrew in your terminal? If so, I can help you run brew reinstall node","pastedContents":{},"timestamp":1784974371794,"project":"/Users/sohee","sessionId":"31868e6a-fdfe-4442-a5f4-b3bd72851bd2"}
+{"display":"NotebookLM 목록 보여줘","pastedContents":{},"timestamp":1784974414366,"project":"/Users/sohee","sessionId":"1224eb5a-5d6b-460c-911c-5036c863567c"}
+{"display":"/mcp","pastedContents":{},"timestamp":1784974514692,"project":"/Users/sohee","sessionId":"1224eb5a-5d6b-460c-911c-5036c863567c"}
+{"display":"npx notebooklm-mcp@latest","pastedContents":{},"timestamp":1784974600343,"project":"/Users/sohee","sessionId":"1224eb5a-5d6b-460c-911c-5036c863567c"}
+{"display":"/config","pastedContents":{},"timestamp":1784974739244,"project":"/Users/sohee","sessionId":"d704413d-9883-454f-8289-567e891b0dbc"}
+{"display":"NotebookLM 목록 보여줘","pastedContents":{},"timestamp":1784974755368,"project":"/Users/sohee","sessionId":"d704413d-9883-454f-8289-567e891b0dbc"}
+{"display":"! claude mcp call notebooklm setup_auth","pastedContents":{},"timestamp":1784974786999,"project":"/Users/sohee","sessionId":"d704413d-9883-454f-8289-567e891b0dbc"}
+{"display":"https://notebooklm.google.com/notebook/6efe0591-be46-447c-9ba7-989923cbe1b6","pastedContents":{},"timestamp":1784974873914,"project":"/Users/sohee","sessionId":"d704413d-9883-454f-8289-567e891b0dbc"}
+{"display":"! claude notebook add-notebook <https://notebooklm.google.com/notebook/6efe0591-be46-447c-9ba7-989923cbe1b6>","pastedContents":{},"timestamp":1784974896331,"project":"/Users/sohee","sessionId":"d704413d-9883-454f-8289-567e891b0dbc"}
+{"display":"NotebookLM 목록 보여줘!","pastedContents":{},"timestamp":1784975012345,"project":"/Users/sohee","sessionId":"d704413d-9883-454f-8289-567e891b0dbc"}
+{"display":"노트북 이름: Claude_Memory_N1 설명: 클로드 주제: 자동차, 연예, 방송, 건강,경제","pastedContents":{},"timestamp":1784975069071,"project":"/Users/sohee","sessionId":"d704413d-9883-454f-8289-567e891b0dbc"}
+{"display":"\"Wrap up: 오늘 우리가 확정한 핵심 내용이랑 다음 액션 플랜 정리해서 내 NotebookLM 'Claude_Memory_Main' 노트북에 텍스트 소스로 저장해 줘.\"","pastedContents":{},"timestamp":1784975143697,"project":"/Users/sohee","sessionId":"d704413d-9883-454f-8289-567e891b0dbc"}
+{"display":"https://notebooklm.google.com/notebook/37911d4f-ebd1-40b6-b10f-0e42e8a618ff","pastedContents":{},"timestamp":1784975223872,"project":"/Users/sohee","sessionId":"d704413d-9883-454f-8289-567e891b0dbc"}
+{"display":"claude mcp add notebooklm -- npx notebooklm-mcp@latest","pastedContents":{},"timestamp":1784976638078,"project":"/Users/sohee","sessionId":"479aa3cd-1049-4005-9e0a-6c70f1292c70"}
+{"display":"yes","pastedContents":{},"timestamp":1784976687539,"project":"/Users/sohee","sessionId":"479aa3cd-1049-4005-9e0a-6c70f1292c70"}
+{"display":"set up","pastedContents":{},"timestamp":1784976742353,"project":"/Users/sohee","sessionId":"479aa3cd-1049-4005-9e0a-6c70f1292c70"}
+{"display":"내 NotebookLM 목록 보여줘","pastedContents":{},"timestamp":1784976793029,"project":"/Users/sohee","sessionId":"479aa3cd-1049-4005-9e0a-6c70f1292c70"}
+{"display":" Claude_Memory_N1 사용하고싶어","pastedContents":{},"timestamp":1784976830049,"project":"/Users/sohee","sessionId":"479aa3cd-1049-4005-9e0a-6c70f1292c70"}
+{"display":"\"Wrap up: 오늘 우리가 확정한 핵심 내용이랑 다음 액션 플랜 정리해서 내 NotebookLM 'Claude_Memory_Main' 노트북에 텍스트 소스로 저장해 줘.\"","pastedContents":{},"timestamp":1784976841376,"project":"/Users/sohee","sessionId":"479aa3cd-1049-4005-9e0a-6c70f1292c70"}
+{"display":"내 NotebookLM 목록 보여줘","pastedContents":{},"timestamp":1784976865029,"project":"/Users/sohee","sessionId":"479aa3cd-1049-4005-9e0a-6c70f1292c70"}
+{"display":"Claude_Memory_Main","pastedContents":{},"timestamp":1784976882605,"project":"/Users/sohee","sessionId":"479aa3cd-1049-4005-9e0a-6c70f1292c70"}
+{"display":"재실행","pastedContents":{},"timestamp":1784976979699,"project":"/Users/sohee","sessionId":"479aa3cd-1049-4005-9e0a-6c70f1292c70"}
+{"display":"내 NotebookLM 목록 보여줘","pastedContents":{},"timestamp":1784977122761,"project":"/Users/sohee","sessionId":"479aa3cd-1049-4005-9e0a-6c70f1292c70"}
+{"display":"Claude_Memory_Main에 \"Wrap up: 오늘 우리가 확정한 핵심 내용이랑 다음 액션 플랜 정리해서 내 NotebookLM 'Claude_Memory_Main' 노트북에 텍스트 소스로 저장해 줘.\"","pastedContents":{},"timestamp":1784977150337,"project":"/Users/sohee","sessionId":"479aa3cd-1049-4005-9e0a-6c70f1292c70"}
+{"display":"처음부터. ","pastedContents":{},"timestamp":1784977214231,"project":"/Users/sohee","sessionId":"479aa3cd-1049-4005-9e0a-6c70f1292c70"}
+{"display":"내 NotebookLM 목록 보여줘","pastedContents":{},"timestamp":1784977245984,"project":"/Users/sohee","sessionId":"3a567901-7c83-4083-84d0-fec51281dc86"}
+{"display":"[Pasted text #1 +6 lines]","pastedContents":{"1":{"id":1,"type":"text","content":"트북이 없습니다.\n\n새 노트북을 추가하려면:\n1. NotebookLM에서 노트북을 만들고 공유 URL을 받으세요\n2. 그 URL을 저에게 주시면 add_notebook으로 라이브러리에 추가하겠습니다\n\n혹은 필요하신 작업이 있으신가요?"}},"timestamp":1784977262220,"project":"/Users/sohee","sessionId":"3a567901-7c83-4083-84d0-fec51281dc86"}
+{"display":"내 NotebookLM 목록 보여줘","pastedContents":{},"timestamp":1784977270103,"project":"/Users/sohee","sessionId":"3a567901-7c83-4083-84d0-fec51281dc86"}
+{"display":"/model","pastedContents":{},"timestamp":1784977279143,"project":"/Users/sohee","sessionId":"3a567901-7c83-4083-84d0-fec51281dc86"}
+{"display":"내 NotebookLM 목록 보여줘","pastedContents":{},"timestamp":1784977286340,"project":"/Users/sohee","sessionId":"3a567901-7c83-4083-84d0-fec51281dc86"}
+{"display":"/model","pastedContents":{},"timestamp":1784977301921,"project":"/Users/sohee","sessionId":"3a567901-7c83-4083-84d0-fec51281dc86"}
+{"display":"claude mcp add notebooklm -- npx notebooklm-mcp@latest","pastedContents":{},"timestamp":1784977312268,"project":"/Users/sohee","sessionId":"3a567901-7c83-4083-84d0-fec51281dc86"}
+{"display":"내 NotebookLM 목록 보여줘","pastedContents":{},"timestamp":1784977336667,"project":"/Users/sohee","sessionId":"df5b97b8-406c-4c20-adac-540a766580d1"}
+{"display":"https://notebooklm.google.com/notebook/5272714b-0330-41b3-a7d1-bd466b755abc","pastedContents":{},"timestamp":1784977368323,"project":"/Users/sohee","sessionId":"df5b97b8-406c-4c20-adac-540a766580d1"}
+{"display":"1.내용: Clause 기 억  2.주졔: 전체적인 내용  3. 전체 글 작성시","pastedContents":{},"timestamp":1784977410784,"project":"/Users/sohee","sessionId":"df5b97b8-406c-4c20-adac-540a766580d1"}
+{"display":"1. 자동차,연예,방송,경제,건강 등","pastedContents":{},"timestamp":1784977439661,"project":"/Users/sohee","sessionId":"df5b97b8-406c-4c20-adac-540a766580d1"}
+{"display":"네","pastedContents":{},"timestamp":1784977452368,"project":"/Users/sohee","sessionId":"df5b97b8-406c-4c20-adac-540a766580d1"}
+{"display":"\"Wrap up: 오늘 우리가 확정한 핵심 내용이랑 다음 액션 플랜 정리해서 내 NotebookLM 'Claude' 노트북에 텍스트 소스로 저장해 줘.\"","pastedContents":{},"timestamp":1784977481628,"project":"/Users/sohee","sessionId":"df5b97b8-406c-4c20-adac-540a766580d1"}
+{"display":"/mcp","pastedContents":{},"timestamp":1784977546387,"project":"/Users/sohee","sessionId":"df5b97b8-406c-4c20-adac-540a766580d1"}
+{"display":"mcp__notebooklm__list_notebooks","pastedContents":{},"timestamp":1784977597934,"project":"/Users/sohee","sessionId":"df5b97b8-406c-4c20-adac-540a766580d1"}
+{"display":"uv 패키지를 설치해줘.","pastedContents":{},"timestamp":1784978649638,"project":"/Users/sohee","sessionId":"2f3ab72f-6c6f-4da6-a9e1-01ce1971ee1b"}
+{"display":" # ~/.zshrc에 추가\nsource $HOME/.local/bin/env","pastedContents":{},"timestamp":1784978714523,"project":"/Users/sohee","sessionId":"2f3ab72f-6c6f-4da6-a9e1-01ce1971ee1b"}
+{"display":"uv tool install notebooklm-mcp-cli 설치해줘","pastedContents":{},"timestamp":1784978741839,"project":"/Users/sohee","sessionId":"2f3ab72f-6c6f-4da6-a9e1-01ce1971ee1b"}
+{"display":"nlm login","pastedContents":{},"timestamp":1784978790738,"project":"/Users/sohee","sessionId":"2f3ab72f-6c6f-4da6-a9e1-01ce1971ee1b"}
+{"display":"nlm skill install claude-code","pastedContents":{},"timestamp":1784978830982,"project":"/Users/sohee","sessionId":"2f3ab72f-6c6f-4da6-a9e1-01ce1971ee1b"}
+{"display":"nlm doctor","pastedContents":{},"timestamp":1784978841214,"project":"/Users/sohee","sessionId":"2f3ab72f-6c6f-4da6-a9e1-01ce1971ee1b"}
+{"display":"nlm skill install claude-code","pastedContents":{},"timestamp":1784979076513,"project":"/Users/sohee","sessionId":"2f3ab72f-6c6f-4da6-a9e1-01ce1971ee1b"}
+{"display":" /skill","pastedContents":{},"timestamp":1784979180409,"project":"/Users/sohee","sessionId":"2f3ab72f-6c6f-4da6-a9e1-01ce1971ee1b"}
+{"display":" 설치된 스킬 목록 확인","pastedContents":{},"timestamp":1784979199361,"project":"/Users/sohee","sessionId":"2f3ab72f-6c6f-4da6-a9e1-01ce1971ee1b"}
+{"display":"  vs Code에  NotebookLM 문서를 보려면 어디로 들어가야해?","pastedContents":{},"timestamp":1784980403613,"project":"/Users/sohee","sessionId":"2f3ab72f-6c6f-4da6-a9e1-01ce1971ee1b"}
+{"display":"git hub 연결해서 notebooklm 을 저장하도록 해줘","pastedContents":{},"timestamp":1784981212913,"project":"/Users/sohee","sessionId":"2f3ab72f-6c6f-4da6-a9e1-01ce1971ee1b"}
+{"display":"4.  현재 디렉토리를 GitHub과 연결","pastedContents":{},"timestamp":1784981234600,"project":"/Users/sohee","sessionId":"2f3ab72f-6c6f-4da6-a9e1-01ce1971ee1b"}
+{"display":"https://github.com/yangsohee94-code/Claude_Memory_N1","pastedContents":{},"timestamp":1784981308338,"project":"/Users/sohee","sessionId":"2f3ab72f-6c6f-4da6-a9e1-01ce1971ee1b"}
