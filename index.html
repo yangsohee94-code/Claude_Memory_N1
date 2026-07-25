@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NotebookLM 목록</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f8f9fa;
+      --surface: #ffffff;
+      --primary: #1a73e8;
+      --primary-hover: #1557b0;
+      --text: #202124;
+      --text-secondary: #5f6368;
+      --border: #dadce0;
+      --card-hover: #f1f3f4;
+      --chip-bg: #e8f0fe;
+      --chip-text: #1967d2;
+      --shadow: 0 1px 3px rgba(60,64,67,.15), 0 1px 2px rgba(60,64,67,.3);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1e1e2e;
+        --surface: #2a2a3e;
+        --primary: #4fa3e8;
+        --primary-hover: #7bbff0;
+        --text: #e2e2e2;
+        --text-secondary: #9aa0a6;
+        --border: #3c3c50;
+        --card-hover: #313147;
+        --chip-bg: #1e3a5f;
+        --chip-text: #7bbff0;
+        --shadow: 0 1px 3px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.5);
+      }
+    }
+
+    body {
+      font-family: 'Google Sans', Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #4285f4, #34a853);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .header-spacer { flex: 1; }
+
+    #btn-signin {
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 20px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    #btn-signin:hover { background: var(--primary-hover); }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    .user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    #btn-signout {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 13px;
+      cursor: pointer;
+      color: var(--text-secondary);
+    }
+    #btn-signout:hover { background: var(--card-hover); }
+
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    .page-title {
+      font-size: 24px;
+      font-weight: 400;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    .page-subtitle {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 28px;
+    }
+
+    #status {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--text-secondary);
+    }
+
+    #status .status-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    #status p {
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      flex: 1;
+      min-width: 200px;
+      position: relative;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 8px 12px 8px 36px;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+    }
+    .search-box input:focus { border-color: var(--primary); }
+    .search-box .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-secondary);
+      font-size: 15px;
+    }
+
+    #btn-refresh {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 13px;
+      cursor: pointer;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #btn-refresh:hover { background: var(--card-hover); }
+
+    .notebook-count {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .notebook-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .notebook-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      cursor: pointer;
+      transition: box-shadow .2s, background .2s;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+    .notebook-card:hover {
+      box-shadow: var(--shadow);
+      background: var(--card-hover);
+    }
+
+    .card-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #4285f4, #34a853);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 14px;
+      font-size: 20px;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 500;
+      margin-bottom: 6px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .card-meta {
+      font-size: 12px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-chip {
+      background: var(--chip-bg);
+      color: var(--chip-text);
+      border-radius: 12px;
+      padding: 2px 10px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .loading-spinner {
+      border: 3px solid var(--border);
+      border-top: 3px solid var(--primary);
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .setup-banner {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .setup-banner h3 {
+      font-size: 16px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    .setup-banner p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+
+    .setup-banner code {
+      background: var(--bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: monospace;
+    }
+
+    #client-id-section {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    #input-client-id {
+      flex: 1;
+      min-width: 200px;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    #btn-save-client-id {
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    #btn-save-client-id:hover { background: var(--primary-hover); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">N</div>
+    NotebookLM 목록
+  </div>
+  <div class="header-spacer"></div>
+  <div id="auth-area">
+    <button id="btn-signin" onclick="signIn()">Google 로그인</button>
+  </div>
+</header>
+
+<main>
+  <h1 class="page-title">내 노트북</h1>
+  <p class="page-subtitle">Google Drive에 저장된 NotebookLM 노트북 목록입니다.</p>
+
+  <div class="setup-banner" id="setup-banner">
+    <h3>⚙️ Google OAuth 클라이언트 ID 설정</h3>
+    <p>
+      Google Cloud Console에서 OAuth 2.0 클라이언트 ID를 생성한 후 아래에 입력하세요.<br>
+      <strong>승인된 자바스크립트 원본</strong>에 현재 URL을 추가해야 합니다.
+    </p>
+    <div id="client-id-section">
+      <input type="text" id="input-client-id" placeholder="예: 123456789.apps.googleusercontent.com" />
+      <button id="btn-save-client-id" onclick="saveClientId()">저장</button>
+    </div>
+  </div>
+
+  <div id="status">
+    <div class="status-icon">📓</div>
+    <p>Google 로그인 후 NotebookLM 노트북 목록을 확인하세요.</p>
+  </div>
+
+  <div id="notebook-section" style="display:none;">
+    <div class="toolbar">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="search-input" placeholder="노트북 검색..." oninput="filterNotebooks()" />
+      </div>
+      <button id="btn-refresh" onclick="loadNotebooks()">↻ 새로고침</button>
+      <span class="notebook-count" id="notebook-count"></span>
+    </div>
+    <div class="notebook-grid" id="notebook-grid"></div>
+  </div>
+</main>
+
+<script>
+  const NOTEBOOKLM_APP_ID = '720312581700';
+  const NOTEBOOKLM_MIME = `application/vnd.google-apps.drive-sdk.${NOTEBOOKLM_APP_ID}`;
+  const SCOPES = 'https://www.googleapis.com/auth/drive.readonly';
+  const LS_CLIENT_KEY = 'nlm_client_id';
+  const LS_TOKEN_KEY = 'nlm_access_token';
+
+  let allNotebooks = [];
+  let tokenClient = null;
+
+  function getClientId() {
+    return localStorage.getItem(LS_CLIENT_KEY) || '';
+  }
+
+  function saveClientId() {
+    const val = document.getElementById('input-client-id').value.trim();
+    if (!val) return alert('클라이언트 ID를 입력해 주세요.');
+    localStorage.setItem(LS_CLIENT_KEY, val);
+    document.getElementById('setup-banner').style.display = 'none';
+    initGoogleClient();
+  }
+
+  function initGoogleClient() {
+    const clientId = getClientId();
+    if (!clientId) return;
+
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: SCOPES,
+      callback: (resp) => {
+        if (resp.error) { showError(resp.error); return; }
+        localStorage.setItem(LS_TOKEN_KEY, resp.access_token);
+        onSignedIn(resp.access_token);
+      },
+    });
+  }
+
+  function signIn() {
+    const clientId = getClientId();
+    if (!clientId) {
+      document.getElementById('setup-banner').style.display = 'block';
+      document.getElementById('input-client-id').focus();
+      return;
+    }
+    if (!tokenClient) initGoogleClient();
+    tokenClient.requestAccessToken({ prompt: 'consent' });
+  }
+
+  async function onSignedIn(token) {
+    const info = await fetch(
+      `https://www.googleapis.com/oauth2/v3/userinfo`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    ).then(r => r.json());
+
+    document.getElementById('auth-area').innerHTML = `
+      <div class="user-info">
+        <img class="user-avatar" src="${info.picture || ''}" alt="" />
+        <span>${info.name || info.email}</span>
+        <button id="btn-signout" onclick="signOut()">로그아웃</button>
+      </div>`;
+
+    await loadNotebooks(token);
+  }
+
+  async function loadNotebooks(token) {
+    token = token || localStorage.getItem(LS_TOKEN_KEY);
+    if (!token) return;
+
+    document.getElementById('status').innerHTML = `
+      <div class="loading-spinner"></div>
+      <p>NotebookLM 노트북을 불러오는 중...</p>`;
+    document.getElementById('status').style.display = 'block';
+    document.getElementById('notebook-section').style.display = 'none';
+
+    try {
+      const query = encodeURIComponent(`mimeType='${NOTEBOOKLM_MIME}' and trashed=false`);
+      const url = `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name,createdTime,modifiedTime,webViewLink)&pageSize=100&orderBy=modifiedTime+desc`;
+
+      const resp = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (resp.status === 401) {
+        localStorage.removeItem(LS_TOKEN_KEY);
+        showStatus('📓', '세션이 만료되었습니다. 다시 로그인해 주세요.');
+        return;
+      }
+
+      const data = await resp.json();
+      allNotebooks = data.files || [];
+      renderNotebooks(allNotebooks);
+    } catch (e) {
+      showError(e.message);
+    }
+  }
+
+  function renderNotebooks(notebooks) {
+    document.getElementById('status').style.display = 'none';
+    document.getElementById('notebook-section').style.display = 'block';
+    document.getElementById('notebook-count').textContent = `${notebooks.length}개`;
+
+    const grid = document.getElementById('notebook-grid');
+    if (notebooks.length === 0) {
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:48px;color:var(--text-secondary)">
+        <div style="font-size:40px;margin-bottom:12px">📭</div>
+        <p>NotebookLM 노트북이 없습니다.</p>
+      </div>`;
+      return;
+    }
+
+    grid.innerHTML = notebooks.map(nb => {
+      const modified = new Date(nb.modifiedTime).toLocaleDateString('ko-KR', {
+        year: 'numeric', month: 'short', day: 'numeric'
+      });
+      return `
+        <a class="notebook-card" href="${nb.webViewLink}" target="_blank" rel="noopener">
+          <div class="card-icon">📓</div>
+          <div class="card-title" title="${escHtml(nb.name)}">${escHtml(nb.name)}</div>
+          <div class="card-meta">
+            <span class="card-chip">NotebookLM</span>
+            <span>수정: ${modified}</span>
+          </div>
+        </a>`;
+    }).join('');
+  }
+
+  function filterNotebooks() {
+    const q = document.getElementById('search-input').value.toLowerCase();
+    const filtered = allNotebooks.filter(nb => nb.name.toLowerCase().includes(q));
+    renderNotebooks(filtered);
+  }
+
+  function signOut() {
+    const token = localStorage.getItem(LS_TOKEN_KEY);
+    if (token) google.accounts.oauth2.revoke(token, () => {});
+    localStorage.removeItem(LS_TOKEN_KEY);
+    location.reload();
+  }
+
+  function showStatus(icon, msg) {
+    document.getElementById('status').innerHTML = `<div class="status-icon">${icon}</div><p>${msg}</p>`;
+    document.getElementById('status').style.display = 'block';
+    document.getElementById('notebook-section').style.display = 'none';
+  }
+
+  function showError(msg) {
+    showStatus('❌', `오류가 발생했습니다: ${msg}`);
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  window.onload = () => {
+    const clientId = getClientId();
+    if (clientId) {
+      document.getElementById('setup-banner').style.display = 'none';
+      document.getElementById('input-client-id').value = clientId;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.onload = () => {
+      if (clientId) initGoogleClient();
+      const token = localStorage.getItem(LS_TOKEN_KEY);
+      if (token) onSignedIn(token);
+    };
+    document.head.appendChild(script);
+  };
+</script>
+
+</body>
+</html>
