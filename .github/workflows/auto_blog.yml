@@ -1,13 +1,5 @@
 name: 자동 블로그 발행 (스케줄)
 on:
-  schedule:
-    - cron: '0 20 * * *'   # 새벽5시 KST
-    - cron: '0 0 * * *'    # 오전9시 KST
-    - cron: '0 2 * * *'    # 오전11시 KST
-    - cron: '0 5 * * *'    # 오후2시 KST
-    - cron: '0 7 * * *'    # 오후4시 KST
-    - cron: '0 9 * * *'    # 오후6시 KST
-    - cron: '0 11 * * *'   # 오후8시 KST
   workflow_dispatch:
     inputs:
       category:
