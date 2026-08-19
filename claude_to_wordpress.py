@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-WP_URL = os.getenv("WP_URL")
+WP_URL = os.getenv("WP_URL", "").rstrip("/")
 WP_USERNAME = os.getenv("WP_USERNAME")
 WP_APP_PASSWORD = os.getenv("WP_APP_PASSWORD")
 
@@ -59,6 +59,7 @@ def generate_content_with_claude(topic: str) -> tuple[str, str]:
 
 def upload_to_wordpress(title: str, content: str) -> dict:
     print("🚀 WordPress에 업로드 중...")
+    print(f"   URL: {WP_URL}")
     credentials = f"{WP_USERNAME}:{WP_APP_PASSWORD}"
     token = base64.b64encode(credentials.encode()).decode("utf-8")
     headers = {
@@ -74,14 +75,21 @@ def upload_to_wordpress(title: str, content: str) -> dict:
         f"{WP_URL}/wp-json/wp/v2/posts",
         headers=headers,
         json=payload,
+        timeout=30,
     )
+    print(f"   HTTP 응답: {response.status_code}")
+    print(f"   응답 내용: {response.text[:500]}")
+
     if response.status_code in (200, 201):
         data = response.json()
-        return {
-            "success": True,
-            "id": data["id"],
-            "edit_link": f"{WP_URL}/wp-admin/post.php?post={data['id']}&action=edit",
-        }
+        if isinstance(data, dict) and "id" in data:
+            return {
+                "success": True,
+                "id": data["id"],
+                "edit_link": f"{WP_URL}/wp-admin/post.php?post={data['id']}&action=edit",
+            }
+        else:
+            return {"success": False, "status_code": response.status_code, "error": str(data)}
     else:
         return {
             "success": False,
@@ -100,8 +108,9 @@ def main():
         print(f"   글 ID    : {result['id']}")
         print(f"   편집하기 : {result['edit_link']}")
     else:
-        print(f"❌ 업로드 실패 (HTTP {result['status_code']})")
+        print(f"❌ 업로드 실패 (HTTP {result.get('status_code', '?')})")
         print(f"   오류: {result['error']}")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
