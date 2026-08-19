@@ -84,13 +84,28 @@ def load_references():
                 texts.append(line)
     return "\n\n".join(texts)
 
+CATEGORY_PROMPT_MAP = {
+    "car":           "01_IT자동차_프롬프트_v1.md",
+    "재테크":        "02_재테크_프롬프트_v1.md",
+    "fashion":       "03_연예인패션_프롬프트_v1.md",
+    "entertainment": "04_방송이슈_프롬프트_v1.md",
+    "living":        "05_리빙_프롬프트_v1.md",
+    "health":        "06_건강상식_프롬프트_v1.md",
+    "sports":        "07_스포츠_프롬프트_v1.md",
+    "education":     "08_교육지식심리_프롬프트_v1.md",
+}
+
 def load_system_prompt():
-    base = Path("system_prompt.md")
+    base = Path("prompts/구글_네이버_수익형_블로그_프롬프트_최종.md")
+    if not base.exists():
+        base = Path("system_prompt.md")
     base_text = base.read_text(encoding="utf-8") if base.exists() else ""
-    category_prompt = Path(f"prompts/{CATEGORY}.md")
-    if category_prompt.exists():
-        cat_text = category_prompt.read_text(encoding="utf-8")
-        return base_text + "\n\n---\n\n## 카테고리 추가 규칙\n\n" + cat_text
+    cat_filename = CATEGORY_PROMPT_MAP.get(CATEGORY)
+    if cat_filename:
+        cat_path = Path(f"prompts/{cat_filename}")
+        if cat_path.exists():
+            cat_text = cat_path.read_text(encoding="utf-8")
+            return base_text + "\n\n---\n\n## 카테고리 세부 지침\n\n" + cat_text
     return base_text
 
 def generate_content(topic, references=""):
