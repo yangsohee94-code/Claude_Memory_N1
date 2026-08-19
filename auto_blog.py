@@ -142,7 +142,7 @@ def _get_drive_service():
         creds_data = json.loads(GOOGLE_CREDENTIALS)
         creds = Credentials.from_service_account_info(
             creds_data,
-            scopes=["https://www.googleapis.com/auth/drive.readonly"],
+            scopes=["https://www.googleapis.com/auth/drive"],
         )
         return build("drive", "v3", credentials=creds)
     except Exception as e:
@@ -222,17 +222,24 @@ def _upload_to_wp_media(img_data, filename, mime_type):
     print(f"   ⚠️ 미디어 업로드 실패 {filename}: HTTP {resp.status_code}")
     return None, None
 
+def _delete_drive_folder(service, folder_id):
+    try:
+        service.files().delete(fileId=folder_id).execute()
+        print(f"   🗑️ Drive 폴더 삭제 완료 (id: {folder_id})")
+    except Exception as e:
+        print(f"   ⚠️ Drive 폴더 삭제 실패: {e}")
+
 def prepare_images():
     service = _get_drive_service()
     if not service:
-        return None, ""
+        return None, [], None
     folder_id = _find_topic_folder(service)
     if not folder_id:
-        return None, ""
+        return None, [], None
     images = _download_images(service, folder_id)
     if not images:
         print("   📂 Drive 폴더에 사진 없음")
-        return None, ""
+        return None, [], folder_id
     print(f"   📸 사진 {len(images)}장 Drive에서 다운로드")
     wp_ids, wp_urls = [], []
     for img in images:
@@ -241,11 +248,11 @@ def prepare_images():
             wp_ids.append(media_id)
             wp_urls.append(url)
     if not wp_ids:
-        return None, ""
+        return None, [], folder_id
     featured_id = wp_ids[0]
     extra_urls = wp_urls[1:]
     print(f"   ✅ 사진 {len(wp_ids)}장 WordPress 업로드 완료")
-    return featured_id, extra_urls
+    return featured_id, extra_urls, folder_id
 
 ENTERTAINMENT_DRAMA_KEYWORDS = [
     "드라마", "영화", "시즌", "넷플릭스", "디즈니", "웨이브", "티빙", "왓챠",
@@ -319,7 +326,7 @@ def main():
     prompt_file = f"prompts/{CATEGORY}.md" if Path(f"prompts/{CATEGORY}.md").exists() else "system_prompt.md"
     print(f"📂 [{CATEGORY}] 슬롯 {slot} | 주제: {topic[:60]}")
     print(f"📋 지침: {prompt_file}")
-    featured_id, extra_image_urls = prepare_images()
+    featured_id, extra_image_urls, drive_folder_id = prepare_images()
     print("📝 Claude 글 생성 중...")
     raw = generate_content(topic, refs)
     title, content = parse_output(raw)
@@ -341,6 +348,10 @@ def main():
         print(f"✅ 발행 완료! ID:{post_id} {link}")
         if not TOPIC_OVERRIDE:
             delete_used_topic(topic)
+        if drive_folder_id:
+            service = _get_drive_service()
+            if service:
+                _delete_drive_folder(service, drive_folder_id)
     else:
         print("❌ 발행 실패")
         exit(1)
