@@ -1,0 +1,69 @@
+name: 자동 블로그 발행 (스케줄)
+
+on:
+  schedule:
+    - cron: '0 20 * * *'   # 새벽5시 KST (UTC 20:00 전날)
+    - cron: '0 0 * * *'    # 오전9시 KST
+    - cron: '0 2 * * *'    # 오전11시 KST
+    - cron: '0 5 * * *'    # 오후2시 KST
+    - cron: '0 7 * * *'    # 오후4시 KST
+    - cron: '0 9 * * *'    # 오후6시 KST
+    - cron: '0 11 * * *'   # 오후8시 KST
+  workflow_dispatch:
+    inputs:
+      category:
+        description: "카테고리 (all = 3개 동시 발행)"
+        required: true
+        default: "all"
+        type: choice
+        options: [all, entertainment, car, health]
+      topic:
+        description: "주제 (비워두면 topics.txt에서 자동 선택)"
+        required: false
+        type: string
+
+jobs:
+  determine-categories:
+    runs-on: ubuntu-latest
+    outputs:
+      categories: ${{ steps.set.outputs.categories }}
+    steps:
+      - id: set
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.category }}" = "all" ]; then
+            echo 'categories=["entertainment","car","health"]' >> $GITHUB_OUTPUT
+          else
+            echo 'categories=["${{ inputs.category }}"]' >> $GITHUB_OUTPUT
+          fi
+
+  publish:
+    needs: determine-categories
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        category: ${{ fromJson(needs.determine-categories.outputs.categories) }}
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 패키지 설치
+        run: pip install anthropic requests python-dotenv google-api-python-client google-auth
+
+      - name: 글 생성 → WordPress 발행
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          WP_URL: ${{ secrets.WP_URL }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+          WP_CAT_ENTERTAINMENT: ${{ secrets.WP_CAT_ENTERTAINMENT }}
+          WP_CAT_CAR: ${{ secrets.WP_CAT_CAR }}
+          WP_CAT_HEALTH: ${{ secrets.WP_CAT_HEALTH }}
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          GOOGLE_DRIVE_ROOT_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_ROOT_FOLDER_ID }}
+          CATEGORY: ${{ matrix.category }}
+          TOPIC: ${{ inputs.topic || '' }}
+        run: python3 auto_blog.py
