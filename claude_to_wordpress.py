@@ -19,11 +19,10 @@ WP_USERNAME = os.getenv("WP_USERNAME")
 WP_APP_PASSWORD = os.getenv("WP_APP_PASSWORD")
 
 
-# ===== 여기서 글 주제를 입력하세요 =====
-TOPIC = """
+# GitHub Actions에서는 환경변수 TOPIC을 사용, 없으면 아래 기본값 사용
+TOPIC = os.getenv("TOPIC") or """
 여기에 글 주제나 요청을 입력하세요.
-예: "재택근무 생산성을 높이는 5가지 방법을 블로그 글로 작성해줘.
-      각 방법마다 실용적인 팁을 포함하고, HTML 형식으로 작성해줘."
+예: 재택근무 생산성을 높이는 5가지 방법을 블로그 글로 작성해줘.
 """
 
 SYSTEM_PROMPT = """당신은 전문 블로그 작가입니다.

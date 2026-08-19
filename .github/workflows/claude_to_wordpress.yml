@@ -1,0 +1,33 @@
+name: Claude → WordPress 임시글 업로드
+
+on:
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: "글 주제 (예: 제주도 여행 코스 추천 블로그 글 작성해줘)"
+        required: true
+        type: string
+
+jobs:
+  generate-and-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 패키지 설치
+        run: pip install anthropic requests python-dotenv
+
+      - name: Claude 글 생성 → WordPress 업로드
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          WP_URL: ${{ secrets.WP_URL }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+          TOPIC: ${{ inputs.topic }}
+        run: python3 claude_to_wordpress.py
