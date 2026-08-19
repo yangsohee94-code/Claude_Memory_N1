@@ -44,16 +44,14 @@ jobs:
         category: ${{ fromJson(needs.determine-categories.outputs.categories) }}
       fail-fast: false
     steps:
-      - name: 코드 체크아웃
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Python 설정
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: 패키지 설치
-        run: pip install anthropic requests python-dotenv
+        run: pip install anthropic requests python-dotenv google-api-python-client google-auth
 
       - name: 글 생성 → WordPress 발행
         env:
@@ -64,6 +62,8 @@ jobs:
           WP_CAT_ENTERTAINMENT: ${{ secrets.WP_CAT_ENTERTAINMENT }}
           WP_CAT_CAR: ${{ secrets.WP_CAT_CAR }}
           WP_CAT_HEALTH: ${{ secrets.WP_CAT_HEALTH }}
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          GOOGLE_DRIVE_ROOT_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_ROOT_FOLDER_ID }}
           CATEGORY: ${{ matrix.category }}
           TOPIC: ${{ inputs.topic || '' }}
         run: python3 auto_blog.py
