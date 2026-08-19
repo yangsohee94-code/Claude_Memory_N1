@@ -328,7 +328,7 @@ def main():
         def _insert_img(m):
             try:
                 url = next(img_iter)
-                return m.group(0) + f'\n<figure class="wp-block-image size-large"><img src="{url}" alt=""/></figure>\n'
+                return m.group(0) + f'\n<figure class="wp-block-image size-full" style="text-align:center;"><img src="{url}" alt="" style="width:100%;max-width:100%;height:auto;"/></figure>\n'
             except StopIteration:
                 return m.group(0)
         content = re.sub(r'</h2>', _insert_img, content, flags=re.IGNORECASE)
