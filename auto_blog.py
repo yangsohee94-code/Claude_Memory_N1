@@ -203,11 +203,9 @@ def prepare_images():
     if not wp_ids:
         return None, ""
     featured_id = wp_ids[0]
-    extra_html = ""
-    for url in wp_urls[1:]:
-        extra_html += f'\n<figure class="wp-block-image size-large"><img src="{url}" alt=""/></figure>\n'
+    extra_urls = wp_urls[1:]
     print(f"   ✅ 사진 {len(wp_ids)}장 WordPress 업로드 완료")
-    return featured_id, extra_html
+    return featured_id, extra_urls
 
 ENTERTAINMENT_DRAMA_KEYWORDS = [
     "드라마", "영화", "시즌", "넷플릭스", "디즈니", "웨이브", "티빙", "왓챠",
@@ -281,13 +279,22 @@ def main():
     prompt_file = f"prompts/{CATEGORY}.md" if Path(f"prompts/{CATEGORY}.md").exists() else "system_prompt.md"
     print(f"📂 [{CATEGORY}] 슬롯 {slot} | 주제: {topic[:60]}")
     print(f"📋 지침: {prompt_file}")
-    featured_id, extra_images_html = prepare_images()
+    featured_id, extra_image_urls = prepare_images()
     print("📝 Claude 글 생성 중...")
     raw = generate_content(topic, refs)
     title, content = parse_output(raw)
-    if extra_images_html:
-        content = content + "\n" + extra_images_html
-    thumb_msg = " + 썸네일 포함" if featured_id else ""
+    if extra_image_urls:
+        parts = re.split(r'(?=<h2[\s>])', content, flags=re.IGNORECASE)
+        img_idx = 0
+        assembled = []
+        for part in parts:
+            assembled.append(part)
+            if re.match(r'<h2[\s>]', part, re.IGNORECASE) and img_idx < len(extra_image_urls):
+                url = extra_image_urls[img_idx]
+                assembled.append(f'\n<figure class="wp-block-image size-large"><img src="{url}" alt=""/></figure>\n')
+                img_idx += 1
+        content = "".join(assembled)
+    thumb_msg = f" + 썸네일 포함 (추가사진 {len(extra_image_urls)}장 H2 배치)" if featured_id else ""
     print(f"✅ 제목: {title}")
     print(f"   본문 {len(content)}자{thumb_msg}")
     print("🚀 WordPress 발행 중...")
