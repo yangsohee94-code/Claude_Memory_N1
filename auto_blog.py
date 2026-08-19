@@ -125,8 +125,25 @@ def _get_drive_service():
         return None
 
 
+def _get_folder_key():
+    """
+    폴더 키 = YYYYMMDD_슬롯번호 (KST 기준 자동 생성)
+    예: 20260820_3 → 2026-08-20 오전11시 슬롯
+    수동 트리거에서 TOPIC 환경변수가 날짜_슬롯 형식(숫자 포함)이면 그대로 사용.
+    """
+    # TOPIC이 날짜+슬롯 형식(YYYYMMDD_N)이면 그것을 폴더 키로 사용
+    if TOPIC_OVERRIDE and re.match(r"^\d{8}_\d+$", TOPIC_OVERRIDE):
+        return TOPIC_OVERRIDE
+    kst_now = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
+    slot = get_slot() + 1  # 1~7
+    return kst_now.strftime("%Y%m%d") + f"_{slot}"
+
+
 def _find_topic_folder(service, topic):
-    """카테고리 폴더 → 주제 폴더 순으로 탐색. 완전 일치 우선, 없으면 포함 관계로 매칭."""
+    """카테고리 폴더 → 날짜_슬롯 폴더 탐색. 예: entertainment/20260820_3/"""
+    folder_key = _get_folder_key()
+    print(f"   📂 Drive 폴더 키: {CATEGORY}/{folder_key}/")
+
     # 1) 카테고리 폴더 찾기
     q = (f"'{DRIVE_ROOT_FOLDER_ID}' in parents "
          f"and name='{CATEGORY}' "
@@ -139,27 +156,17 @@ def _find_topic_folder(service, topic):
         return None
     cat_id = cat_folders[0]["id"]
 
-    # 2) 주제 폴더 목록 가져오기
+    # 2) 날짜_슬롯 폴더 찾기 (완전 일치)
     q2 = (f"'{cat_id}' in parents "
+          f"and name='{folder_key}' "
           f"and mimeType='application/vnd.google-apps.folder' "
           f"and trashed=false")
     res2 = service.files().list(q=q2, fields="files(id,name)").execute()
     folders = res2.get("files", [])
+    if folders:
+        return folders[0]["id"]
 
-    # 완전 일치
-    for f in folders:
-        if f["name"] == topic:
-            return f["id"]
-
-    # 부분 일치 (폴더명이 주제에 포함되거나, 주제가 폴더명에 포함)
-    topic_clean = topic.replace(" ", "")
-    for f in folders:
-        folder_clean = f["name"].replace(" ", "")
-        if folder_clean in topic_clean or topic_clean in folder_clean:
-            print(f"   📂 Drive 폴더 부분매칭: {f['name']}")
-            return f["id"]
-
-    print(f"   📂 Drive 주제 폴더 없음: {topic[:30]}")
+    print(f"   📂 Drive 폴더 없음 ({folder_key}) — 사진 없이 발행")
     return None
 
 
@@ -208,9 +215,9 @@ def _upload_to_wp_media(img_data, filename, mime_type):
     return None, None
 
 
-def prepare_images(topic):
+def prepare_images(topic=""):
     """
-    Google Drive에서 주제 폴더의 사진을 가져와 WordPress에 업로드.
+    Google Drive에서 날짜_슬롯 폴더의 사진을 가져와 WordPress에 업로드.
     반환: (featured_media_id, extra_images_html)
       - featured_media_id : 대표 썸네일 ID (첫 번째 사진)
       - extra_images_html : 나머지 사진 <img> 태그 HTML
