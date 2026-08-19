@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os, re, io, json, base64, datetime, requests, anthropic
+from sns_post import publish_to_sns
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -352,6 +353,15 @@ def main():
             service = _get_drive_service()
             if service:
                 _delete_drive_folder(service, drive_folder_id)
+        featured_image_url = ""
+        if featured_id:
+            # WordPress 미디어 URL 조회
+            cred = base64.b64encode(f"{WP_USERNAME}:{WP_APP_PASSWORD}".encode()).decode()
+            r = requests.get(f"{WP_URL}/wp-json/wp/v2/media/{featured_id}",
+                             headers={"Authorization": f"Basic {cred}"}, timeout=10)
+            if r.status_code == 200:
+                featured_image_url = r.json().get("source_url", "")
+        publish_to_sns(title, content, link, featured_image_url=featured_image_url)
     else:
         print("❌ 발행 실패")
         exit(1)
