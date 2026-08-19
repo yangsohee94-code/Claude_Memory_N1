@@ -324,16 +324,14 @@ def main():
     raw = generate_content(topic, refs)
     title, content = parse_output(raw)
     if extra_image_urls:
-        parts = re.split(r'(?=<h2[\s>])', content, flags=re.IGNORECASE)
-        img_idx = 0
-        assembled = []
-        for part in parts:
-            assembled.append(part)
-            if re.match(r'<h2[\s>]', part, re.IGNORECASE) and img_idx < len(extra_image_urls):
-                url = extra_image_urls[img_idx]
-                assembled.append(f'\n<figure class="wp-block-image size-large"><img src="{url}" alt=""/></figure>\n')
-                img_idx += 1
-        content = "".join(assembled)
+        img_iter = iter(extra_image_urls)
+        def _insert_img(m):
+            try:
+                url = next(img_iter)
+                return m.group(0) + f'\n<figure class="wp-block-image size-large"><img src="{url}" alt=""/></figure>\n'
+            except StopIteration:
+                return m.group(0)
+        content = re.sub(r'</h2>', _insert_img, content, flags=re.IGNORECASE)
     thumb_msg = f" + 썸네일 포함 (추가사진 {len(extra_image_urls)}장 H2 배치)" if featured_id else ""
     print(f"✅ 제목: {title}")
     print(f"   본문 {len(content)}자{thumb_msg}")
