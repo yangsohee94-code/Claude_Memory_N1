@@ -60,11 +60,13 @@ def load_references():
     return "\n\n".join(texts)
 
 def load_system_prompt():
+    base = Path("system_prompt.md")
+    base_text = base.read_text(encoding="utf-8") if base.exists() else ""
     category_prompt = Path(f"prompts/{CATEGORY}.md")
     if category_prompt.exists():
-        return category_prompt.read_text(encoding="utf-8")
-    p = Path("system_prompt.md")
-    return p.read_text(encoding="utf-8") if p.exists() else ""
+        cat_text = category_prompt.read_text(encoding="utf-8")
+        return base_text + "\n\n---\n\n## 카테고리 추가 규칙\n\n" + cat_text
+    return base_text
 
 def generate_content(topic, references=""):
     system_prompt = load_system_prompt()
