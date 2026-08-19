@@ -59,9 +59,11 @@ jobs:
           WP_URL: ${{ secrets.WP_URL }}
           WP_USERNAME: ${{ secrets.WP_USERNAME }}
           WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
-          WP_CAT_ENTERTAINMENT: ${{ secrets.WP_CAT_ENTERTAINMENT }}
+          WP_CAT_ENTERTAINMENT_POP: ${{ secrets.WP_CAT_ENTERTAINMENT_POP }}
+          WP_CAT_ENTERTAINMENT_DRAMA: ${{ secrets.WP_CAT_ENTERTAINMENT_DRAMA }}
           WP_CAT_CAR: ${{ secrets.WP_CAT_CAR }}
-          WP_CAT_HEALTH: ${{ secrets.WP_CAT_HEALTH }}
+          WP_CAT_HEALTH_DIET: ${{ secrets.WP_CAT_HEALTH_DIET }}
+          WP_CAT_HEALTH_INFO: ${{ secrets.WP_CAT_HEALTH_INFO }}
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
           GOOGLE_DRIVE_ROOT_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_ROOT_FOLDER_ID }}
           CATEGORY: ${{ matrix.category }}

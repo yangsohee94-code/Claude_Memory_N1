@@ -207,29 +207,57 @@ def prepare_images():
     print(f"   ✅ 사진 {len(wp_ids)}장 WordPress 업로드 완료")
     return featured_id, extra_html
 
-def get_category_ids():
-    # WP_CATEGORY_ID override: user manually specifies subcategory ID at trigger time
+ENTERTAINMENT_DRAMA_KEYWORDS = [
+    "드라마", "영화", "시즌", "넷플릭스", "디즈니", "웨이브", "티빙", "왓챠",
+    "OTT", "방영", "방송", "개봉", "출연", "주연", "조연", "감독", "대본",
+    "시청률", "결말", "스포", "리뷰", "줄거리", "OST", "촬영", "제작",
+]
+HEALTH_DIET_KEYWORDS = [
+    "다이어트", "식단", "체중", "칼로리", "감량", "살", "지방", "탄수화물",
+    "단백질", "저칼로리", "공복", "단식", "간헐적", "식이", "BMI", "체지방",
+    "뱃살", "허벅지", "다이어트식", "건강식단", "끼니", "탄단지",
+]
+
+def _auto_classify(title, content):
+    """제목+본문 키워드로 entertainment/health 서브카테고리 자동 분류."""
+    text = (title + " " + content).lower()
+    if CATEGORY == "entertainment":
+        drama_score = sum(1 for kw in ENTERTAINMENT_DRAMA_KEYWORDS if kw in text)
+        if drama_score >= 2:
+            label = "영화&드라마"
+            cat_id = int(os.getenv("WP_CAT_ENTERTAINMENT_DRAMA", "43"))
+        else:
+            label = "연예소식"
+            cat_id = int(os.getenv("WP_CAT_ENTERTAINMENT_POP", "44"))
+        print(f"   🏷️ 자동 분류 → {label} (드라마 키워드 {drama_score}개, ID:{cat_id})")
+        return cat_id
+    if CATEGORY == "health":
+        diet_score = sum(1 for kw in HEALTH_DIET_KEYWORDS if kw in text)
+        if diet_score >= 2:
+            label = "다이어트&식단"
+            cat_id = int(os.getenv("WP_CAT_HEALTH_DIET", "47"))
+        else:
+            label = "건강정보&영양"
+            cat_id = int(os.getenv("WP_CAT_HEALTH_INFO", "48"))
+        print(f"   🏷️ 자동 분류 → {label} (다이어트 키워드 {diet_score}개, ID:{cat_id})")
+        return cat_id
+    return int(os.getenv("WP_CAT_CAR", "29"))
+
+def get_category_ids(title="", content=""):
+    # 수동 오버라이드가 있으면 그것을 우선 사용
     if WP_CATEGORY_ID_OVERRIDE:
         cat_id = int(WP_CATEGORY_ID_OVERRIDE)
-        print(f"   📌 카테고리 ID 오버라이드: {cat_id}")
+        print(f"   📌 카테고리 ID 수동 지정: {cat_id}")
         return [cat_id]
-    # Fall back to default category secrets
-    cat_map = {
-        "entertainment": int(os.getenv("WP_CAT_ENTERTAINMENT", "0")),
-        "car": int(os.getenv("WP_CAT_CAR", "0")),
-        "health": int(os.getenv("WP_CAT_HEALTH", "0")),
-    }
-    cat_id = cat_map.get(CATEGORY, 0)
-    if cat_id:
-        print(f"   📌 기본 카테고리 ID: {cat_id} ({CATEGORY})")
-        return [cat_id]
-    return []
+    # 콘텐츠 기반 자동 분류
+    cat_id = _auto_classify(title, content)
+    return [cat_id] if cat_id else []
 
 def publish_to_wordpress(title, content, featured_media_id=None):
     credentials = f"{WP_USERNAME}:{WP_APP_PASSWORD}"
     token = base64.b64encode(credentials.encode()).decode("utf-8")
     headers = {"Authorization": f"Basic {token}", "Content-Type": "application/json"}
-    categories = get_category_ids()
+    categories = get_category_ids(title, content)
     payload = {"title": title, "content": content, "status": "publish"}
     if categories:
         payload["categories"] = categories
