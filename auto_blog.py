@@ -48,12 +48,21 @@ def get_topic():
     return topics[index]
 
 
-def delete_used_reference(topic):
-    """발행 완료 후 사용한 references 파일 삭제"""
+def delete_used_topic(topic):
+    """발행 완료 후 topics 파일과 references 파일에서 해당 주제 삭제"""
+    # references 파일 삭제
     ref_file = Path(f"references/{CATEGORY}/{topic}.txt")
     if ref_file.exists():
         ref_file.unlink()
-        print(f"   🗑️ 사용 완료 references 삭제: {ref_file.name}")
+        print(f"   🗑️ references 삭제: {ref_file.name}")
+    # topics 파일에서 해당 줄 제거
+    topic_file = Path(f"topics/{CATEGORY}.txt")
+    if topic_file.exists():
+        lines = topic_file.read_text(encoding="utf-8").splitlines(keepends=True)
+        new_lines = [l for l in lines if l.strip() != topic]
+        if len(new_lines) < len(lines):
+            topic_file.write_text("".join(new_lines), encoding="utf-8")
+            print(f"   🗑️ topics/{CATEGORY}.txt에서 삭제: {topic}")
 
 def load_references():
     ref_dir = Path(f"references/{CATEGORY}")
@@ -318,7 +327,7 @@ def main():
     if ok:
         print(f"✅ 발행 완료! ID:{post_id} {link}")
         if not TOPIC_OVERRIDE:
-            delete_used_reference(topic)
+            delete_used_topic(topic)
     else:
         print("❌ 발행 실패")
         exit(1)
