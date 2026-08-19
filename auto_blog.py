@@ -27,6 +27,14 @@ def get_slot():
 def get_topic():
     if TOPIC_OVERRIDE:
         return TOPIC_OVERRIDE
+    # references 폴더에 파일이 있으면 가장 오래된 파일명을 주제로 사용
+    ref_dir = Path(f"references/{CATEGORY}")
+    if ref_dir.exists():
+        ref_files = sorted([f for f in ref_dir.glob("*.txt") if f.stat().st_size > 0])
+        if ref_files:
+            topic = ref_files[0].stem
+            print(f"   📌 references 파일에서 주제 선택: {topic}")
+            return topic
     topic_file = Path(f"topics/{CATEGORY}.txt")
     if not topic_file.exists():
         return f"오늘의 {CATEGORY} 트렌드 주제"
@@ -38,6 +46,14 @@ def get_topic():
     day = datetime.date.today().toordinal()
     index = (day * 7 + slot) % len(topics)
     return topics[index]
+
+
+def delete_used_reference(topic):
+    """발행 완료 후 사용한 references 파일 삭제"""
+    ref_file = Path(f"references/{CATEGORY}/{topic}.txt")
+    if ref_file.exists():
+        ref_file.unlink()
+        print(f"   🗑️ 사용 완료 references 삭제: {ref_file.name}")
 
 def load_references():
     ref_dir = Path(f"references/{CATEGORY}")
@@ -301,6 +317,8 @@ def main():
     ok, post_id, link = publish_to_wordpress(title, content, featured_media_id=featured_id)
     if ok:
         print(f"✅ 발행 완료! ID:{post_id} {link}")
+        if not TOPIC_OVERRIDE:
+            delete_used_reference(topic)
     else:
         print("❌ 발행 실패")
         exit(1)
