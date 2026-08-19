@@ -78,6 +78,11 @@ def load_references():
 
 
 def load_system_prompt():
+    # 카테고리별 전용 지침 우선 로드
+    category_prompt = Path(f"prompts/{CATEGORY}.md")
+    if category_prompt.exists():
+        return category_prompt.read_text(encoding="utf-8")
+    # 없으면 기본 system_prompt.md 사용
     p = Path("system_prompt.md")
     return p.read_text(encoding="utf-8") if p.exists() else ""
 
@@ -148,6 +153,7 @@ def main():
     topic = get_topic()
     refs = load_references()
     print(f"📂 [{CATEGORY}] 슬롯 {get_slot()} | 주제: {topic[:50]}")
+    print(f"📋 지침: prompts/{CATEGORY}.md" if Path(f"prompts/{CATEGORY}.md").exists() else "📋 지침: system_prompt.md")
     print("📝 Claude 글 생성 중...")
     raw = generate_content(topic, refs)
     title, content = parse_output(raw)
