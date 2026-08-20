@@ -71,14 +71,26 @@ class DIM_Ajax {
         $this->auth();
         $on = filter_var( $_POST['enable'] ?? true, FILTER_VALIDATE_BOOLEAN );
         if ( $on ) {
-            if ( ! wp_next_scheduled( 'dim_optimize_cron' ) ) {
-                wp_schedule_event( time(), 'daily', 'dim_optimize_cron' );
-            }
-            wp_send_json_success( [ 'message' => '매일 자동 최적화가 예약되었습니다.' ] );
+            wp_clear_scheduled_hook( 'dim_optimize_cron' ); // 기존 예약 초기화 후 재등록
+            wp_schedule_event( self::next_3am(), 'daily', 'dim_optimize_cron' );
+            wp_send_json_success( [ 'message' => '매일 새벽 3시에 자동 최적화가 실행됩니다.' ] );
         } else {
             wp_clear_scheduled_hook( 'dim_optimize_cron' );
             wp_send_json_success( [ 'message' => '자동 최적화 예약이 해제되었습니다.' ] );
         }
+    }
+
+    /**
+     * 다음 새벽 3시 타임스탬프 (서버 로컬 시간 기준)
+     */
+    private static function next_3am(): int {
+        $now    = current_time( 'timestamp' );
+        $target = mktime( 3, 0, 0, (int) date( 'n', $now ), (int) date( 'j', $now ), (int) date( 'Y', $now ) );
+        // 이미 오늘 3시가 지났으면 내일 3시
+        if ( $target <= $now ) {
+            $target = strtotime( '+1 day', $target );
+        }
+        return $target;
     }
 
     private function auth() {
