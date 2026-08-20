@@ -3,7 +3,7 @@
  * Plugin Name: Duplicate Image Merger
  * Plugin URI:  https://github.com/yangsohee94-code/claude_memory_n1
  * Description: 중복 이미지 병합 · WebP 변환 · 대표이미지 정합성 자동 최적화
- * Version:     1.2.8
+ * Version:     1.2.9
  * Author:      Claude Memory N1
  * License:     GPL-2.0+
  * Text Domain: duplicate-image-merger
@@ -11,7 +11,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'DIM_VERSION',    '1.2.8' );
+define( 'DIM_VERSION',    '1.2.9' );
 define( 'DIM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DIM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -39,8 +39,10 @@ register_deactivation_hook( __FILE__, function () {
     wp_clear_scheduled_hook( 'dim_optimize_cron' );
 } );
 
-// 관리자 로그인 세션 7일 유지
-// "로그인 상태 유지" 체크 여부와 무관하게 강제 적용
+// ── 관리자 세션 영속 관리 ──────────────────────────────────────────
+// 목표: 탭 닫아도 만료 없음 / 마지막 접속 후 7일 미접속 시에만 만료
+
+// ① 쿠키 유효기간 항상 7일로 고정 (remember 여부 무관)
 add_filter( 'auth_cookie_expiration', function ( $expiration, $user_id, $remember ) {
     if ( user_can( $user_id, 'manage_options' ) ) {
         return 7 * DAY_IN_SECONDS;
@@ -48,7 +50,28 @@ add_filter( 'auth_cookie_expiration', function ( $expiration, $user_id, $remembe
     return $expiration;
 }, 10, 3 );
 
-// login_form_defaults는 login_form 액션보다 먼저 실행되므로 직접 등록해야 함
+// ② 로그인 시 "remember=true" 강제 설정 → 브라우저 닫아도 쿠키 유지
+add_action( 'wp_login', function ( $user_login, $user ) {
+    if ( ! user_can( $user, 'manage_options' ) ) return;
+    wp_clear_auth_cookie();
+    wp_set_auth_cookie( $user->ID, true, is_ssl() );
+}, 10, 2 );
+
+// ③ 관리자 페이지 접속 시 하루 1회 쿠키 갱신 (슬라이딩 만료)
+//    마지막 접속 시점을 기준으로 7일이 리셋됨
+add_action( 'admin_init', function () {
+    if ( ! is_user_logged_in() ) return;
+    $user_id = get_current_user_id();
+    if ( ! user_can( $user_id, 'manage_options' ) ) return;
+
+    $last = (int) get_user_meta( $user_id, '_dim_session_refreshed', true );
+    if ( $last && ( time() - $last ) < DAY_IN_SECONDS ) return;
+
+    wp_set_auth_cookie( $user_id, true, is_ssl() );
+    update_user_meta( $user_id, '_dim_session_refreshed', time() );
+} );
+
+// ④ 로그인 폼에서 "로그인 상태 유지" 기본 체크 표시 (시각적 일관성)
 add_filter( 'login_form_defaults', function ( $defaults ) {
     $defaults['rememberme'] = true;
     return $defaults;
