@@ -412,7 +412,7 @@
     function convertAll() {
         if (!DIM.can_webp) return notice('이 서버는 WebP 변환을 지원하지 않습니다. GD/Imagick 미설치 또는 업로드 디렉토리 쓰기 권한이 없을 수 있습니다.', false);
         $progWebp = $progWebp || $('#dim-progress-webp');
-        var totals = { converted: 0, skipped: 0, errors: 0, unlink_failed: 0 };
+        var totals = { converted: 0, skipped: 0, errors: 0, unlink_failed: 0, firstError: '' };
         webpBatch(totals);
     }
 
@@ -430,11 +430,12 @@
             }
             var batchConverted = d.converted || 0;
             var batchSkipped   = d.skipped   || 0;
-            var batchErrors    = (d.errors   || []).length;
+            var batchErrMsgs   = d.errors    || [];
             totals.converted     += batchConverted;
             totals.skipped       += batchSkipped;
-            totals.errors        += batchErrors;
+            totals.errors        += batchErrMsgs.length;
             totals.unlink_failed += d.unlink_failed || 0;
+            if (!totals.firstError && batchErrMsgs.length) totals.firstError = batchErrMsgs[0];
             // 실제로 변환된 이미지가 있을 때만 다음 배치 진행
             // skip(파일 없음)이나 오류만 있으면 무한루프 방지 — converted만 진행 기준으로 사용
             var madeProgress = batchConverted > 0;
@@ -442,7 +443,8 @@
             var ok  = totals.errors === 0 && totals.converted > 0;
             var msg;
             if (totals.converted === 0 && totals.errors > 0) {
-                msg = 'WebP 변환 실패 — 서버가 WebP 변환을 지원하지 않거나 권한이 없습니다 (오류 ' + totals.errors + '개)';
+                msg = 'WebP 변환 실패 (오류 ' + totals.errors + '개)';
+                if (totals.firstError) msg += ' — ' + totals.firstError;
             } else {
                 msg = 'WebP 변환 완료: 성공 ' + totals.converted + '개 · 건너뜀 ' + totals.skipped + '개';
                 if (totals.unlink_failed) msg += ' · 원본삭제 실패 ' + totals.unlink_failed + '개';

@@ -113,7 +113,8 @@ class DIM_Converter {
     }
 
     private function do_convert( string $src, string $dest, string $mime ) {
-        if ( ! is_writable( dirname( $dest ) ) ) return '업로드 디렉토리 쓰기 권한 없음';
+        // is_writable() 체크 제거: 업로드된 파일이 있으면 디렉토리 쓰기 가능.
+        // 일부 서버에서 심볼릭 링크 등으로 is_writable() 오탐 → 실제 쓰기로 판별.
 
         if ( extension_loaded( 'imagick' ) ) {
             try {
@@ -123,31 +124,41 @@ class DIM_Converter {
                 $img->writeImage( $dest );
                 $img->destroy();
                 return true;
-            } catch ( Exception $e ) {
-                // fall through to GD
+            } catch ( \Throwable $e ) {
+                // Imagick 실패 (PHP8 Error 포함) → GD로 폴백
             }
         }
 
-        if ( ! function_exists( 'imagewebp' ) ) return 'WebP 미지원 서버';
+        if ( ! function_exists( 'imagewebp' ) ) return 'WebP 미지원 서버 (GD imagewebp 없음)';
 
+        error_clear_last();
         if ( $mime === 'image/jpeg' ) {
             $img = @imagecreatefromjpeg( $src );
         } elseif ( $mime === 'image/png' ) {
             $img = @imagecreatefrompng( $src );
             if ( $img ) {
-                // PNG 알파채널 보존
                 imagealphablending( $img, false );
                 imagesavealpha( $img, true );
             }
         } elseif ( $mime === 'image/gif' ) {
             $img = @imagecreatefromgif( $src );
         } else {
-            $img = false;
+            return '지원하지 않는 형식: ' . $mime;
         }
-        if ( ! $img ) return '이미지 로드 실패';
 
-        $ok = imagewebp( $img, $dest, 82 );
+        if ( ! $img ) {
+            $err = error_get_last();
+            return '이미지 로드 실패' . ( $err ? ' (' . $err['message'] . ')' : '' );
+        }
+
+        error_clear_last();
+        $ok = @imagewebp( $img, $dest, 82 );
         imagedestroy( $img );
-        return $ok ? true : '변환 실패';
+
+        if ( ! $ok ) {
+            $err = error_get_last();
+            return 'WebP 쓰기 실패' . ( $err ? ' (' . $err['message'] . ')' : '' );
+        }
+        return true;
     }
 }
