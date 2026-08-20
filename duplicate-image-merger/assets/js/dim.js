@@ -173,8 +173,7 @@
             var g = $(this).data('group-idx');
             (tasks[g]=tasks[g]||[]).push($(this).val());
         });
-        if (!Object.keys(tasks).length) return alert('선택된 항목이 없습니다.');
-        if (!confirm('선택 이미지를 병합합니다. 삭제된 이미지는 복구 불가합니다.')) return;
+        if (!Object.keys(tasks).length) return notice('선택된 항목이 없습니다.', false);
 
         var calls = [], merged = 0, mergeErrors = 0;
         $.each(tasks, function(g, ids){
@@ -209,8 +208,7 @@
 
     function autoMerge(pendingOverride) {
         var target = pendingOverride || groups;
-        if (!target.length) return;
-        if (!pendingOverride && !confirm('사용 중인 이미지 기준으로 전체 자동 병합합니다. 50그룹씩 순차 처리됩니다.')) return;
+        if (!target.length) return notice('중복 이미지가 없습니다. 먼저 스캔하세요.', false);
 
         var BATCH = 50;
         var batches = [];
@@ -255,7 +253,6 @@
     }
 
     function fixThumbnails() {
-        if (!confirm('손상된 대표이미지를 자동 수정합니다.')) return;
         prog(getProgDup(), 0, 0, '대표이미지 확인 중');
         post('fix_thumbnails', {}, function(err, d){
             hideProg(getProgDup());
@@ -265,7 +262,6 @@
     }
 
     function runAll() {
-        if (!confirm('중복 병합 → WebP 변환 → 대표이미지 수정을 지금 실행합니다.')) return;
 
         var BATCH = 50;
         var batches = [];
@@ -349,7 +345,6 @@
     function convertSelected() {
         var ids = $('.dim-nw-checkbox:checked').map(function(){ return this.value; }).get();
         if (!ids.length) return;
-        if (!confirm(ids.length+'개 이미지를 WebP로 변환합니다. 50개씩 순차 처리됩니다.')) return;
 
         var totals = { converted: 0, skipped: 0, errors: 0, unlink_failed: 0 };
         var done = 0;
@@ -387,7 +382,6 @@
 
     function convertAll() {
         if (!DIM.can_webp) return notice('이 서버는 WebP 변환을 지원하지 않습니다 (GD 또는 Imagick 필요).', false);
-        if (!confirm('전체 이미지를 WebP로 변환합니다. 50개씩 순차 처리되며 원본 파일은 삭제됩니다.')) return;
         $progWebp = $progWebp || $('#dim-progress-webp');
         var totals = { converted: 0, skipped: 0, errors: 0, unlink_failed: 0 };
         webpBatch(totals);
@@ -565,8 +559,7 @@
         $(document).on('click', '.dim-merge-group-btn', function(){
             var g    = $(this).data('group-idx');
             var keep = $('input[name="dim-keep-'+g+'"]:checked').val();
-            if (!keep) return alert('원본 유지 이미지를 선택하세요.');
-            if (!confirm('이 그룹을 병합합니다.')) return;
+            if (!keep) return notice('원본 유지 이미지를 선택하세요.', false);
             var del = [];
             $('.dim-item-checkbox[data-group-idx="'+g+'"]').each(function(){ if(this.value!==keep) del.push(this.value); });
             if (!del.length) return;
