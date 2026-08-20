@@ -312,7 +312,7 @@
                         BlockControls, null,
                         el( ToolbarButton, {
                             icon      : 'scissors',
-                            label     : '이미지 자르기',
+                            label     : '자유 자르기',
                             showTooltip: true,
                             onClick   : ( function ( p ) {
                                 return function () {
