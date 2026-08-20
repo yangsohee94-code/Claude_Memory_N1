@@ -220,8 +220,8 @@
         savePendingGroups(target);
 
         var totalMerged = 0, totalErrors = [];
-        var done = 0;
-        prog(getProgDup(), done, batches.length, '자동 병합 중');
+        var groupsDone = 0;
+        prog(getProgDup(), groupsDone, target.length, '자동 병합 중');
 
         var chain = $.when();
         batches.forEach(function(batch, batchIdx) {
@@ -237,12 +237,14 @@
                         totalMerged += r.data.merged || 0;
                         totalErrors  = totalErrors.concat(r.data.errors || []);
                     }
+                    groupsDone += batch.length;
                     savePendingGroups(target.slice((batchIdx + 1) * BATCH));
-                    prog(getProgDup(), ++done, batches.length, '자동 병합 중');
+                    prog(getProgDup(), groupsDone, target.length, '자동 병합 중');
                     dfd.resolve();
                 })
                 .fail(function() {
-                    prog(getProgDup(), ++done, batches.length, '자동 병합 중');
+                    groupsDone += batch.length;
+                    prog(getProgDup(), groupsDone, target.length, '자동 병합 중');
                     dfd.resolve();  // 실패도 resolve로 처리해 다음 배치 계속 진행
                 });
                 return dfd.promise();
