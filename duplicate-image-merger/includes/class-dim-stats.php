@@ -321,6 +321,45 @@ class DIM_Stats {
                     }
                 }
             }
+
+            // 이름 미확보 broken ID 보완: ① _wp_attached_file 재조회 ② guid/post_title
+            $unnamed = [];
+            foreach ( $broken_post_imgs as $aids ) {
+                foreach ( $aids as $aid ) {
+                    if ( ! isset( $att_names[ $aid ] ) ) $unnamed[ $aid ] = true;
+                }
+            }
+            if ( ! empty( $unnamed ) ) {
+                $u_ids = array_keys( $unnamed );
+                $u_phs = implode( ',', array_fill( 0, count( $u_ids ), '%d' ) );
+
+                // ① postmeta 직접 조회 (mime 필터 없이)
+                $meta_rows = $wpdb->get_results( $wpdb->prepare(
+                    "SELECT post_id, meta_value FROM {$wpdb->postmeta}
+                     WHERE post_id IN ({$u_phs}) AND meta_key = '_wp_attached_file'",
+                    ...$u_ids
+                ) );
+                foreach ( $meta_rows as $mr ) {
+                    if ( $mr->meta_value ) {
+                        $att_names[ (int) $mr->post_id ] = basename( $mr->meta_value );
+                    }
+                }
+
+                // ② 여전히 미확보 → guid(URL) 또는 post_title 사용
+                $still = array_values( array_filter( $u_ids, fn( $id ) => ! isset( $att_names[ $id ] ) ) );
+                if ( ! empty( $still ) ) {
+                    $s_phs  = implode( ',', array_fill( 0, count( $still ), '%d' ) );
+                    $p_rows = $wpdb->get_results( $wpdb->prepare(
+                        "SELECT ID, post_title, guid FROM {$wpdb->posts} WHERE ID IN ({$s_phs})",
+                        ...$still
+                    ) );
+                    foreach ( $p_rows as $r ) {
+                        $aid = (int) $r->ID;
+                        $fn  = $r->guid ? basename( (string) parse_url( $r->guid, PHP_URL_PATH ) ) : '';
+                        $att_names[ $aid ] = $fn ?: ( $r->post_title ?: '' );
+                    }
+                }
+            }
         }
 
         $items = [];
