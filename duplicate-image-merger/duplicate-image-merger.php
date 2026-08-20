@@ -11,7 +11,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'DIM_VERSION',    '1.2.6' );
+define( 'DIM_VERSION',    '1.2.7' );
 define( 'DIM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DIM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -37,4 +37,21 @@ add_action( 'add_attachment', function ( $attachment_id ) {
 
 register_deactivation_hook( __FILE__, function () {
     wp_clear_scheduled_hook( 'dim_optimize_cron' );
+} );
+
+// 관리자 로그인 세션 7일 유지
+// "로그인 상태 유지" 체크 여부와 무관하게 강제 적용
+add_filter( 'auth_cookie_expiration', function ( $expiration, $user_id, $remember ) {
+    if ( user_can( $user_id, 'manage_options' ) ) {
+        return 7 * DAY_IN_SECONDS;
+    }
+    return $expiration;
+}, 10, 3 );
+
+add_action( 'login_form', function () {
+    // 로그인 폼에서 "로그인 상태 유지" 기본 체크
+    add_filter( 'login_form_defaults', function ( $defaults ) {
+        $defaults['rememberme'] = true;
+        return $defaults;
+    } );
 } );
