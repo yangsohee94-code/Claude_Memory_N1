@@ -188,13 +188,15 @@
         var chain = $.when();
         calls.forEach(function(c){
             chain = chain.then(function(){
-                return $.ajax({
+                var dfd = $.Deferred();
+                $.ajax({
                     url: DIM.ajax_url, type: 'POST', timeout: 90000,
                     data: $.extend({ action:'dim_merge', nonce:DIM.nonce }, c)
                 })
-                    .done(function(r){ if(r.success) merged += r.data.merged || 0; else mergeErrors++; })
-                    .fail(function(){ mergeErrors++; })
-                    .always(function(){ prog(getProgDup(), ++done, total, '병합 중'); });
+                .done(function(r){ if(r.success) merged += r.data.merged || 0; else mergeErrors++; })
+                .fail(function(){ mergeErrors++; })
+                .always(function(){ prog(getProgDup(), ++done, total, '병합 중'); dfd.resolve(); });
+                return dfd.promise();
             });
         });
         chain.always(function(){
@@ -224,22 +226,26 @@
         var chain = $.when();
         batches.forEach(function(batch, batchIdx) {
             chain = chain.then(function() {
-                return $.ajax({
+                // 실패해도 항상 resolve — 실패 시 chain이 중단되어 always()가 즉시 호출되는 문제 방지
+                var dfd = $.Deferred();
+                $.ajax({
                     url: DIM.ajax_url, type: 'POST', timeout: 90000,
                     data: { action: 'dim_auto_merge', nonce: DIM.nonce, groups: batch }
                 })
-                    .done(function(r) {
-                        if (r.success) {
-                            totalMerged += r.data.merged || 0;
-                            totalErrors  = totalErrors.concat(r.data.errors || []);
-                        }
-                        // 완료된 배치 이후 그룹만 남겨 저장 (중단 시 재개 지점)
-                        savePendingGroups(target.slice((batchIdx + 1) * BATCH));
-                        prog(getProgDup(), ++done, batches.length, '자동 병합 중');
-                    })
-                    .fail(function() {
-                        prog(getProgDup(), ++done, batches.length, '자동 병합 중');
-                    });
+                .done(function(r) {
+                    if (r.success) {
+                        totalMerged += r.data.merged || 0;
+                        totalErrors  = totalErrors.concat(r.data.errors || []);
+                    }
+                    savePendingGroups(target.slice((batchIdx + 1) * BATCH));
+                    prog(getProgDup(), ++done, batches.length, '자동 병합 중');
+                    dfd.resolve();
+                })
+                .fail(function() {
+                    prog(getProgDup(), ++done, batches.length, '자동 병합 중');
+                    dfd.resolve();  // 실패도 resolve로 처리해 다음 배치 계속 진행
+                });
+                return dfd.promise();
             });
         });
         chain.always(function() {
@@ -273,11 +279,13 @@
         var chain = $.when();
         batches.forEach(function(batch) {
             chain = chain.then(function() {
-                return $.ajax({
+                var dfd = $.Deferred();
+                $.ajax({
                     url: DIM.ajax_url, type: 'POST', timeout: 90000,
                     data: { action:'dim_auto_merge', nonce:DIM.nonce, groups:batch }
                 })
-                    .always(function(){ prog(getProgDup(), ++done, total, '자동 병합 중'); });
+                .always(function(){ prog(getProgDup(), ++done, total, '자동 병합 중'); dfd.resolve(); });
+                return dfd.promise();
             });
         });
         chain.always(function() {
@@ -352,22 +360,24 @@
         var chain = $.when();
         ids.forEach(function(id) {
             chain = chain.then(function() {
-                return $.ajax({
+                var dfd = $.Deferred();
+                $.ajax({
                     url: DIM.ajax_url, type: 'POST', timeout: 90000,
                     data: { action:'dim_convert_webp', nonce:DIM.nonce, single_id: id }
                 })
-                    .done(function(r) {
-                        if (r.success) {
-                            totals.converted     += r.data.converted     || 0;
-                            totals.skipped       += r.data.skipped       || 0;
-                            totals.errors        += (r.data.errors       || []).length;
-                            totals.unlink_failed += r.data.unlink_failed || 0;
-                        } else {
-                            totals.errors++;
-                        }
-                    })
-                    .fail(function() { totals.errors++; })
-                    .always(function() { prog($progWebp, ++done, ids.length, 'WebP 변환 중'); });
+                .done(function(r) {
+                    if (r.success) {
+                        totals.converted     += r.data.converted     || 0;
+                        totals.skipped       += r.data.skipped       || 0;
+                        totals.errors        += (r.data.errors       || []).length;
+                        totals.unlink_failed += r.data.unlink_failed || 0;
+                    } else {
+                        totals.errors++;
+                    }
+                })
+                .fail(function() { totals.errors++; })
+                .always(function() { prog($progWebp, ++done, ids.length, 'WebP 변환 중'); dfd.resolve(); });
+                return dfd.promise();
             });
         });
         chain.always(function() {
