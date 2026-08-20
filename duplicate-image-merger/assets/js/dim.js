@@ -27,9 +27,10 @@
     function hideProg($wrap){ setTimeout(function(){ $wrap.hide(); }, 700); }
 
     function notice(msg, ok) {
-        $('#dim-notice').removeClass('dim-ok dim-err')
+        var $n = $('#dim-notice').removeClass('dim-ok dim-err')
             .addClass(ok ? 'dim-ok' : 'dim-err').html(msg).show();
-        $('html,body').animate({ scrollTop: $('#dim-notice').offset().top - 40 }, 200);
+        var off = $n.offset();
+        if (off) $('html,body').animate({ scrollTop: off.top - 40 }, 200);
     }
 
     function post(action, data, cb) {
@@ -45,6 +46,12 @@
         $(this).addClass('active');
         $('#dim-tab-'+$(this).data('tab')).addClass('active');
     });
+
+    // ── 유틸: 항상 유효한 $progDup 반환 ──
+    function getProgDup() {
+        if (!$progDup || !$progDup.length) $progDup = $('#dim-progress-dup');
+        return $progDup;
+    }
 
     // ── 자동 예약 ──
     function initSchedule() {
@@ -176,22 +183,22 @@
         });
 
         var total = calls.length, done = 0;
-        prog($progDup, done, total, '병합 중');
+        prog(getProgDup(), done, total, '병합 중');
         var chain = $.when();
         calls.forEach(function(c){
             chain = chain.then(function(){
                 return $.post(DIM.ajax_url, $.extend({action:'dim_merge',nonce:DIM.nonce},c))
-                    .done(function(r){ if(r.success) merged+=r.data.merged; prog($progDup, ++done, total, '병합 중'); });
+                    .done(function(r){ if(r.success) merged+=r.data.merged; prog(getProgDup(), ++done, total, '병합 중'); });
             });
         });
-        chain.always(function(){ hideProg($progDup); notice(merged+'개 병합 완료.', true); startScan(); });
+        chain.always(function(){ hideProg(getProgDup()); notice(merged+'개 병합 완료.', true); startScan(); });
     }
 
     function autoMerge() {
         if (!groups.length || !confirm('사용 중인 이미지 기준으로 전체 자동 병합합니다.')) return;
-        prog($progDup, 0, 0, '자동 병합 중');
+        prog(getProgDup(), 0, 0, '자동 병합 중');
         post('auto_merge', { groups:groups }, function(err, d){
-            hideProg($progDup);
+            hideProg(getProgDup());
             err ? notice(err.message, false)
                 : notice(d.merged+'개 병합 완료.', true);
             startScan();
@@ -200,9 +207,9 @@
 
     function fixThumbnails() {
         if (!confirm('손상된 대표이미지를 자동 수정합니다.')) return;
-        prog($progDup, 0, 0, '대표이미지 확인 중');
+        prog(getProgDup(), 0, 0, '대표이미지 확인 중');
         post('fix_thumbnails', {}, function(err, d){
-            hideProg($progDup);
+            hideProg(getProgDup());
             err ? notice(err.message, false)
                 : notice('대표이미지 수정 완료 — 총 '+d.total_checked+'개 확인 · 연결: '+d.fixed+'개 · 삭제: '+d.cleared+'개', true);
         });
@@ -210,14 +217,14 @@
 
     function runAll() {
         if (!confirm('중복 병합 → WebP 변환 → 대표이미지 수정을 지금 실행합니다.')) return;
-        prog($progDup, 0, 0, '전체 최적화 중');
+        prog(getProgDup(), 0, 0, '전체 최적화 중');
         post('auto_merge', { groups:groups }, function(){
             if (DIM.can_webp) {
                 webpAllSync(0, function(){
-                    post('fix_thumbnails', {}, function(){ hideProg($progDup); notice('전체 최적화 완료!', true); startScan(); });
+                    post('fix_thumbnails', {}, function(){ hideProg(getProgDup()); notice('전체 최적화 완료!', true); startScan(); });
                 });
             } else {
-                post('fix_thumbnails', {}, function(){ hideProg($progDup); notice('최적화 완료!', true); startScan(); });
+                post('fix_thumbnails', {}, function(){ hideProg(getProgDup()); notice('최적화 완료!', true); startScan(); });
             }
         });
     }
