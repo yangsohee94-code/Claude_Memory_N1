@@ -1,0 +1,66 @@
+/* ================================================================
+   Quick Image Insert — 불필요한 툴바 버튼 숨기기
+   ================================================================ */
+
+/* ── 1. 텍스트 블록 (제목/단락): 텍스트 정렬 버튼 숨기기 ──────── */
+/* 정렬 드롭다운 전체 그룹 */
+.block-editor-block-toolbar .components-toolbar-group:has(button[aria-label="텍스트 정렬"]) {
+    display: none !important;
+}
+/* 좌/중/우 각각 표시되는 경우 */
+button[aria-label="왼쪽 정렬"],
+button[aria-label="가운데 정렬"],
+button[aria-label="오른쪽 정렬"],
+button[aria-label="텍스트 정렬"] {
+    display: none !important;
+}
+
+/* ── 2. AI 플러그인 버튼 숨기기 (반크매스 Content AI, 스파클 등) ── */
+/* Rank Math Content AI 버튼 */
+.rank-math-content-ai-toolbar,
+[class*="rank-math"][class*="ai"],
+[class*="rank-math"][class*="toolbar"] {
+    display: none !important;
+}
+/* Gutenberg 내장 AI / 스파클(✦) 버튼 */
+button[aria-label*="AI로 작성"],
+button[aria-label*="AI 도구"],
+button[aria-label*="AI 어시스턴트"],
+button[aria-label*="Copilot"],
+button[aria-label*="글쓰기 도구"] {
+    display: none !important;
+}
+/* 아이콘이 sparkle(별 모양)인 버튼 — data-icon 으로 식별 */
+button[data-icon="ai"] {
+    display: none !important;
+}
+
+/* ── 3. 이미지 블록 툴바: 링크·자르기·텍스트오버레이·alt 버튼 숨기기 ── */
+/* 이미지 링크 설정 버튼 */
+button[aria-label="이미지 링크"],
+button[aria-label="링크 삽입"],
+button[aria-label="링크 수정"] {
+    display: none !important;
+}
+/* 이미지 자르기 버튼 */
+button[aria-label="자르기"],
+button[aria-label="이미지 자르기"] {
+    display: none !important;
+}
+/* 텍스트 오버레이 추가 버튼 */
+button[aria-label="텍스트 오버레이 추가"],
+button[aria-label="텍스트 추가"] {
+    display: none !important;
+}
+/* 대체 텍스트 경고 버튼 (⚠ 삼각형) */
+button[aria-label="대체 텍스트"],
+button[aria-label="대체 텍스트 추가"],
+button[aria-label="대체 텍스트 없음"] {
+    display: none !important;
+}
+
+/* ── 4. 이미지 블록 정렬 버튼 (≡ 계열) ──────────────────────────── */
+/* PHP 에서 supports.align = false 로 이미 제거되지만 CSS 도 추가 */
+.wp-block-image .block-editor-block-toolbar .block-editor-block-alignment-control {
+    display: none !important;
+}

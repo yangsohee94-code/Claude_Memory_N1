@@ -1,33 +1,26 @@
 ( function () {
     var el = window.wp.element.createElement;
     var registerPlugin = window.wp.plugins.registerPlugin;
-    var PluginBlockSettingsMenuItem = window.wp.editPost.PluginBlockSettingsMenuItem;
     var BlockControls = window.wp.blockEditor.BlockControls;
     var ToolbarGroup = window.wp.components.ToolbarGroup;
     var ToolbarButton = window.wp.components.ToolbarButton;
     var useSelect = window.wp.data.useSelect;
     var useDispatch = window.wp.data.useDispatch;
-    var Fragment = window.wp.element.Fragment;
     var createBlock = window.wp.blocks.createBlock;
 
+    // ─── 이미지 삽입 버튼 ────────────────────────────────────────
     function QuickImageInsertButton() {
         var selectedBlock = useSelect( function ( select ) {
             return select( 'core/block-editor' ).getSelectedBlock();
         } );
-
         var insertBlock = useDispatch( 'core/block-editor' ).insertBlocks;
-        var getSelectedBlockClientId = useSelect( function ( select ) {
-            return select( 'core/block-editor' ).getSelectedBlockClientId;
-        } );
 
-        // 텍스트 계열 블록에서만 버튼 표시
         var allowedBlocks = [
             'core/paragraph',
             'core/heading',
             'core/list',
             'core/quote',
             'core/pullquote',
-            'core/cover',
         ];
 
         if ( ! selectedBlock || allowedBlocks.indexOf( selectedBlock.name ) === -1 ) {
@@ -35,25 +28,30 @@
         }
 
         function openMediaLibrary() {
+            // frame: 'post' → 업로드 탭 + 미디어 라이브러리 탭 모두 포함 (아이패드 호환)
             var frame = wp.media( {
-                title: '이미지 선택',
+                title: '미디어 또는 파일 찾기',
                 button: { text: '이미지 삽입' },
                 multiple: false,
+                frame: 'post',
+                state: 'insert',
                 library: { type: 'image' },
             } );
 
-            frame.on( 'select', function () {
-                var attachment = frame.state().get( 'selection' ).first().toJSON();
-                var imageBlock = createBlock( 'core/image', {
-                    url: attachment.url,
-                    alt: attachment.alt || attachment.title || '',
-                    caption: '',
-                    id: attachment.id,
+            frame.on( 'insert', function () {
+                var selection = frame.state().get( 'selection' );
+                selection.each( function ( attachment ) {
+                    var data = attachment.toJSON();
+                    var imageBlock = createBlock( 'core/image', {
+                        url: data.url,
+                        alt: data.alt || data.title || '',
+                        caption: '',
+                        id: data.id,
+                    } );
+                    var clientId = wp.data.select( 'core/block-editor' ).getSelectedBlockClientId();
+                    var index = wp.data.select( 'core/block-editor' ).getBlockIndex( clientId );
+                    insertBlock( imageBlock, index + 1 );
                 } );
-
-                var clientId = wp.data.select( 'core/block-editor' ).getSelectedBlockClientId();
-                var index = wp.data.select( 'core/block-editor' ).getBlockIndex( clientId );
-                insertBlock( imageBlock, index + 1 );
             } );
 
             frame.open();
@@ -67,7 +65,7 @@
                 null,
                 el( ToolbarButton, {
                     icon: 'format-image',
-                    label: '이미지 삽입',
+                    label: '미디어 / 파일 찾기',
                     onClick: openMediaLibrary,
                     showTooltip: true,
                 } )
