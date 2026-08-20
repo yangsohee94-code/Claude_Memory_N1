@@ -337,13 +337,11 @@
                         el(
                             ToolbarGroup, null,
                             el( ToolbarButton, {
-                                icon      : 'scissors',
-                                label     : '자유 자르기',
-                                showTooltip: true,
-                                onClick   : function () {
+                                label  : '자르기',
+                                onClick: function () {
                                     openCropModal( url, id, clientId, alt );
                                 },
-                            } )
+                            }, '자르기' )
                         )
                     )
                 );
