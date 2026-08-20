@@ -3,14 +3,19 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 class DIM_Scanner {
 
+    // 세션 내 캐시: 썸네일 ID 목록 (한 번만 로드)
+    private $thumbnail_ids = null;
+
     /**
-     * 미디어 라이브러리 전체 스캔 후 중복 그룹 반환
+     * 스캔: MD5 해시만으로 중복 그룹 구성. is_used 체크 없음 (속도 최적화)
      */
-    public function scan_duplicates( $batch_size = 200, $offset = 0 ) {
+    public function scan_duplicates( $batch_size = 100, $offset = 0 ) {
+        @set_time_limit( 120 );
+
         global $wpdb;
 
         $attachments = $wpdb->get_results( $wpdb->prepare(
-            "SELECT ID, guid FROM {$wpdb->posts}
+            "SELECT ID FROM {$wpdb->posts}
              WHERE post_type = 'attachment'
                AND post_mime_type LIKE 'image/%'
              ORDER BY ID ASC
@@ -22,84 +27,126 @@ class DIM_Scanner {
 
         foreach ( $attachments as $att ) {
             $file = get_attached_file( $att->ID );
-            if ( ! $file || ! file_exists( $file ) ) {
-                continue;
-            }
+            if ( ! $file || ! file_exists( $file ) ) continue;
+
             $hash = md5_file( $file );
             if ( ! $hash ) continue;
 
-            $used = $this->is_image_in_use( $att->ID );
-
-            $hash_map[ $hash ][] = [
-                'id'        => $att->ID,
-                'file'      => $file,
-                'file_size' => filesize( $file ),
-                'url'       => wp_get_attachment_url( $att->ID ),
-                'is_used'   => $used,
-                'title'     => get_the_title( $att->ID ),
-                'date'      => get_the_date( 'Y-m-d H:i', $att->ID ),
-            ];
+            $hash_map[ $hash ][] = (int) $att->ID;
         }
 
-        // 중복(2개 이상)인 그룹만 반환
+        // 중복(2개 이상)인 ID 목록만 반환 — is_used는 이 단계에서 하지 않음
         $duplicates = [];
-        foreach ( $hash_map as $hash => $items ) {
-            if ( count( $items ) >= 2 ) {
-                $duplicates[] = [
-                    'hash'  => $hash,
-                    'items' => $items,
-                    'count' => count( $items ),
-                ];
+        foreach ( $hash_map as $hash => $ids ) {
+            if ( count( $ids ) >= 2 ) {
+                $duplicates[] = [ 'hash' => $hash, 'ids' => $ids ];
             }
         }
 
         return [
-            'duplicates'  => $duplicates,
+            'duplicates'    => $duplicates,
             'total_scanned' => count( $attachments ),
-            'has_more'    => count( $attachments ) === $batch_size,
+            'has_more'      => count( $attachments ) === $batch_size,
         ];
     }
 
     /**
-     * 특정 첨부파일이 게시물/페이지/메타에서 사용 중인지 확인
+     * 중복 그룹 ID 목록 → 상세 정보(is_used 포함) 한꺼번에 조회
+     * 스캔 완료 후 중복 그룹에 한해서만 호출하므로 쿼리 수가 대폭 감소
+     */
+    public function enrich_groups( array $groups ) {
+        if ( empty( $groups ) ) return [];
+
+        // 필요한 ID만 수집
+        $all_ids = [];
+        foreach ( $groups as $g ) {
+            foreach ( $g['ids'] as $id ) $all_ids[] = $id;
+        }
+        $all_ids = array_unique( $all_ids );
+
+        // 썸네일로 사용 중인 ID 목록 (단 1쿼리)
+        $thumb_used = $this->get_thumbnail_ids();
+
+        // 본문에서 사용 중인 attachment ID (단 1쿼리로 URL 기반 검색)
+        $content_used = $this->get_content_used_ids( $all_ids );
+
+        $enriched = [];
+        foreach ( $groups as $g ) {
+            $items = [];
+            foreach ( $g['ids'] as $id ) {
+                $file    = get_attached_file( $id );
+                $is_used = in_array( $id, $thumb_used, true )
+                        || in_array( $id, $content_used, true );
+
+                $items[] = [
+                    'id'        => $id,
+                    'file_size' => ( $file && file_exists( $file ) ) ? (int) filesize( $file ) : 0,
+                    'url'       => wp_get_attachment_url( $id ),
+                    'is_used'   => $is_used,
+                    'title'     => get_the_title( $id ),
+                    'date'      => get_the_date( 'Y-m-d H:i', $id ),
+                ];
+            }
+            $enriched[] = [
+                'hash'  => $g['hash'],
+                'items' => $items,
+                'count' => count( $items ),
+            ];
+        }
+
+        return $enriched;
+    }
+
+    /**
+     * 특정 첨부파일 단건 사용 여부 확인 (병합/자동병합 시 사용)
      */
     public function is_image_in_use( $attachment_id ) {
         global $wpdb;
 
-        // 특성 이미지(썸네일)로 사용 중인지
-        $as_thumbnail = $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->postmeta}
-             WHERE meta_key = '_thumbnail_id' AND meta_value = %d",
-            $attachment_id
-        ) );
-        if ( $as_thumbnail > 0 ) return true;
+        $thumb_used = $this->get_thumbnail_ids();
+        if ( in_array( (int) $attachment_id, $thumb_used, true ) ) return true;
 
-        // 본문 콘텐츠에 URL이 포함되어 있는지
         $url = wp_get_attachment_url( $attachment_id );
         if ( ! $url ) return false;
 
-        $in_content = $wpdb->get_var( $wpdb->prepare(
+        return (bool) $wpdb->get_var( $wpdb->prepare(
             "SELECT COUNT(*) FROM {$wpdb->posts}
              WHERE post_status NOT IN ('trash','auto-draft')
                AND post_content LIKE %s",
             '%' . $wpdb->esc_like( $url ) . '%'
         ) );
-        if ( $in_content > 0 ) return true;
-
-        // 메타값(갤러리 등)에 ID가 포함되어 있는지
-        $in_meta = $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->postmeta}
-             WHERE meta_value LIKE %s",
-            '%' . $wpdb->esc_like( $attachment_id ) . '%'
-        ) );
-        if ( $in_meta > 0 ) return true;
-
-        return false;
     }
 
-    /**
-     * 전체 미디어 수 반환
-     */
+    // ── 내부 헬퍼 ──
+
+    private function get_thumbnail_ids(): array {
+        if ( $this->thumbnail_ids !== null ) return $this->thumbnail_ids;
+        global $wpdb;
+        $rows = $wpdb->get_col(
+            "SELECT DISTINCT CAST(meta_value AS UNSIGNED) FROM {$wpdb->postmeta}
+             WHERE meta_key = '_thumbnail_id' AND meta_value != ''"
+        );
+        $this->thumbnail_ids = array_map( 'intval', $rows );
+        return $this->thumbnail_ids;
+    }
+
+    private function get_content_used_ids( array $ids ): array {
+        global $wpdb;
+        $used = [];
+        foreach ( $ids as $id ) {
+            $url = wp_get_attachment_url( $id );
+            if ( ! $url ) continue;
+            $found = $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->posts}
+                 WHERE post_status NOT IN ('trash','auto-draft')
+                   AND post_content LIKE %s LIMIT 1",
+                '%' . $wpdb->esc_like( basename( $url ) ) . '%'
+            ) );
+            if ( $found ) $used[] = (int) $id;
+        }
+        return $used;
+    }
+
     public function get_total_images() {
         global $wpdb;
         return (int) $wpdb->get_var(

@@ -5,7 +5,7 @@ class DIM_Ajax {
 
     public function init() {
         $actions = [
-            'scan', 'merge', 'auto_merge', 'convert_webp', 'fix_thumbnails',
+            'scan', 'enrich', 'merge', 'auto_merge', 'convert_webp', 'fix_thumbnails',
             'schedule', 'get_counts',
             'get_stats', 'get_no_thumb_posts', 'get_nonwebp', 'delete_images',
         ];
@@ -18,9 +18,18 @@ class DIM_Ajax {
         $this->auth();
         $scanner = new DIM_Scanner();
         wp_send_json_success( $scanner->scan_duplicates(
-            absint( $_POST['batch']  ?? 200 ),
+            absint( $_POST['batch']  ?? 100 ),
             absint( $_POST['offset'] ?? 0 )
         ) );
+    }
+
+    // 스캔 완료 후 중복 그룹 상세정보(is_used 등) 일괄 조회
+    public function handle_enrich() {
+        $this->auth();
+        @set_time_limit( 60 );
+        $scanner = new DIM_Scanner();
+        $groups  = $_POST['groups'] ?? [];
+        wp_send_json_success( [ 'groups' => $scanner->enrich_groups( $groups ) ] );
     }
 
     public function handle_merge() {

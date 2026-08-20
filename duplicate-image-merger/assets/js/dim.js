@@ -62,9 +62,12 @@
     // ═══════════════════════════════════
     var $progDup = null;
 
+    var rawGroups = [];   // 스캔 단계: {hash, ids[]} 목록
+
     function startScan() {
         $progDup = $('#dim-progress-dup');
-        groups = [];
+        groups    = [];
+        rawGroups = [];
         $('#dim-results').empty();
         $('#dim-select-all-wrap, #dim-summary').hide();
         $('#dim-notice').hide();
@@ -79,19 +82,33 @@
     }
 
     function scanBatch(offset, scanned) {
-        var total = totalImages || Math.max(offset + 200, scanned + 200);
-        prog($progDup, scanned, total, '스캔 중');
-        post('scan', { offset:offset, batch:200 }, function(err, data){
+        var total = totalImages || Math.max(offset + 100, scanned + 100);
+        prog($progDup, scanned, total, '해시 스캔 중');
+        post('scan', { offset: offset, batch: 100 }, function(err, data){
             if (err) return notice('스캔 실패: '+(err.message||''), false);
-            data.duplicates.forEach(function(g){ groups.push(g); });
+            data.duplicates.forEach(function(g){ rawGroups.push(g); });
             var done = scanned + data.total_scanned;
-            prog($progDup, done, totalImages || done + (data.has_more ? 200 : 0), '스캔 중');
-            if (data.has_more) { scanBatch(offset+200, done); return; }
-            renderDuplicates(done);
+            prog($progDup, done, totalImages || done + (data.has_more ? 100 : 0), '해시 스캔 중');
+            if (data.has_more) { scanBatch(offset + 100, done); return; }
+            // 스캔 완료 → 중복 그룹 상세정보 조회
+            enrichGroups(done);
         });
     }
 
-    function renderDuplicates(scanned) {
+    function enrichGroups(scanned) {
+        if (!rawGroups.length) {
+            renderDuplicates(scanned, []);
+            return;
+        }
+        prog($progDup, 0, 0, '사용 여부 확인 중 (중복 '+rawGroups.length+'그룹)');
+        post('enrich', { groups: rawGroups }, function(err, data){
+            if (err) return notice('상세조회 실패: '+(err.message||''), false);
+            renderDuplicates(scanned, data.groups || []);
+        });
+    }
+
+    function renderDuplicates(scanned, enriched) {
+        groups = enriched;
         hideProg($progDup);
         var saved = groups.reduce(function(s,g){
             var sizes = g.items.map(function(i){ return i.file_size||0; });
