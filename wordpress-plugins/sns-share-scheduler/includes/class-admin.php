@@ -27,6 +27,14 @@ class SNS_Admin {
             'sns-share-status',
             [ $this, 'render_status_page' ]
         );
+        add_submenu_page(
+            'edit.php',
+            'SNS 예약 달력',
+            '📅 SNS 달력',
+            'edit_posts',
+            'sns-share-calendar',
+            [ $this, 'render_calendar_page' ]
+        );
     }
 
     public function register_settings() {
@@ -61,5 +69,9 @@ class SNS_Admin {
 
     public function render_status_page() {
         include SNS_SCHEDULER_PATH . 'templates/status-page.php';
+    }
+
+    public function render_calendar_page() {
+        include SNS_SCHEDULER_PATH . 'templates/calendar-page.php';
     }
 }

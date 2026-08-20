@@ -188,6 +188,70 @@
     line-height: 1;
 }
 
+/* 편집 패널 */
+#sns-edit-panel {
+    margin-top: 10px;
+    border: 1px solid #0073aa;
+    border-radius: 6px;
+    padding: 10px;
+    background: #f0f6fc;
+}
+
+.sns-edit-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #0073aa;
+}
+
+.sns-icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #888;
+    padding: 0;
+    line-height: 1;
+}
+
+#sns-edit-content {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 12px;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 6px 8px;
+    resize: vertical;
+    font-family: inherit;
+    line-height: 1.5;
+}
+
+.sns-char-info {
+    font-size: 11px;
+    color: #666;
+    text-align: right;
+    margin: 3px 0 6px;
+}
+
+.sns-char-info.over-limit {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+.sns-edit-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.sns-edit-actions .button-primary {
+    font-size: 12px;
+}
+
 .sns-settings-link {
     margin-top: 12px;
     font-size: 11px;

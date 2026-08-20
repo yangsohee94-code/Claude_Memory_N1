@@ -7,6 +7,7 @@ class SNS_Scheduler {
 
     public function __construct() {
         add_action( 'add_meta_boxes', [ $this, 'add_meta_box' ] );
+        add_action( 'wp_ajax_sns_preview_content', [ $this, 'ajax_preview_content' ] );
         add_action( 'wp_ajax_sns_schedule_share', [ $this, 'ajax_schedule_share' ] );
         add_action( 'wp_ajax_sns_get_queue', [ $this, 'ajax_get_queue' ] );
         add_action( 'wp_ajax_sns_cancel_queue_item', [ $this, 'ajax_cancel_queue_item' ] );
@@ -45,7 +46,8 @@ class SNS_Scheduler {
         ] );
     }
 
-    public function ajax_schedule_share() {
+    // Step 1: 문구 자동 생성만 반환 (예약 미확정)
+    public function ajax_preview_content() {
         check_ajax_referer( 'sns_share_nonce', 'nonce' );
         if ( ! current_user_can( 'edit_posts' ) ) wp_send_json_error( '권한이 없습니다.' );
 
@@ -55,20 +57,44 @@ class SNS_Scheduler {
         if ( ! $post_id || ! in_array( $platform, [ 'twitter', 'threads', 'pinterest', 'facebook' ] ) ) {
             wp_send_json_error( '잘못된 요청입니다.' );
         }
+        $post = get_post( $post_id );
+        if ( ! $post || $post->post_status !== 'publish' ) {
+            wp_send_json_error( '발행된 글에서만 공유할 수 있습니다.' );
+        }
+
+        $data = SNS_Content_Generator::generate( $post_id, $platform );
+        wp_send_json_success( [ 'content' => $data['content'] ] );
+    }
+
+    // Step 2: 사용자 확정 문구로 예약 등록
+    public function ajax_schedule_share() {
+        check_ajax_referer( 'sns_share_nonce', 'nonce' );
+        if ( ! current_user_can( 'edit_posts' ) ) wp_send_json_error( '권한이 없습니다.' );
+
+        $post_id  = intval( $_POST['post_id'] ?? 0 );
+        $platform = sanitize_key( $_POST['platform'] ?? '' );
+        $content  = sanitize_textarea_field( $_POST['content'] ?? '' );
+
+        if ( ! $post_id || ! in_array( $platform, [ 'twitter', 'threads', 'pinterest', 'facebook' ] ) ) {
+            wp_send_json_error( '잘못된 요청입니다.' );
+        }
+        if ( ! $content ) {
+            wp_send_json_error( '공유 문구를 입력해주세요.' );
+        }
 
         $post = get_post( $post_id );
         if ( ! $post || $post->post_status !== 'publish' ) {
             wp_send_json_error( '발행된 글에서만 공유할 수 있습니다.' );
         }
 
-        $data       = SNS_Content_Generator::generate( $post_id, $platform );
-        $scheduled  = $this->get_next_slot( $platform );
+        $data      = SNS_Content_Generator::generate( $post_id, $platform );
+        $scheduled = $this->get_next_slot( $platform );
 
         global $wpdb;
         $wpdb->insert( $wpdb->prefix . 'sns_share_queue', [
             'post_id'      => $post_id,
             'platform'     => $platform,
-            'content'      => $data['content'],
+            'content'      => $content,
             'image_url'    => $data['image_url'],
             'post_url'     => $data['post_url'],
             'scheduled_at' => date( 'Y-m-d H:i:s', $scheduled ),
@@ -77,9 +103,8 @@ class SNS_Scheduler {
 
         $local_time = get_date_from_gmt( date( 'Y-m-d H:i:s', $scheduled ), 'Y년 m월 d일 H:i' );
         wp_send_json_success( [
-            'message'      => "{$local_time}에 {$platform} 예약 완료",
+            'message'      => "{$local_time}에 예약 완료",
             'scheduled_at' => $local_time,
-            'preview'      => $data['content'],
         ] );
     }
 

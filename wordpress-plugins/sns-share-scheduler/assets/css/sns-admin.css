@@ -75,6 +75,35 @@
     width: 180px;
 }
 
+/* 눈 아이콘 토글 */
+.sns-secret-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sns-secret-wrap input {
+    flex: 1;
+}
+
+.sns-eye-btn {
+    background: none;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    color: #666;
+    transition: border-color 0.15s;
+    flex-shrink: 0;
+}
+
+.sns-eye-btn:hover {
+    border-color: #0073aa;
+    color: #0073aa;
+}
+
 /* 공유 현황 페이지 */
 .sns-status {
     font-size: 11px;

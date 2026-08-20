@@ -7,6 +7,17 @@
 
     <?php settings_errors(); ?>
 
+    <script>
+    function snsToggleVisible(btn) {
+        var wrap  = btn.closest('.sns-secret-wrap');
+        var input = wrap.querySelector('input');
+        var isHidden = input.type === 'password';
+        input.type = isHidden ? 'text' : 'password';
+        btn.title  = isHidden ? '숨기기' : '보기';
+        btn.innerHTML = isHidden ? '🙈' : '👁';
+    }
+    </script>
+
     <form method="post" action="options.php">
         <?php settings_fields( 'sns_scheduler_options' ); ?>
 
@@ -35,21 +46,30 @@
                         </tr>
                         <tr>
                             <th>API Secret (Consumer Secret)</th>
-                            <td><input type="password" name="sns_scheduler_options[twitter_api_secret]"
-                                value="<?php echo esc_attr( $options['twitter_api_secret'] ?? '' ); ?>"
-                                class="regular-text" /></td>
+                            <td><span class="sns-secret-wrap">
+                                <input type="password" name="sns_scheduler_options[twitter_api_secret]"
+                                    value="<?php echo esc_attr( $options['twitter_api_secret'] ?? '' ); ?>"
+                                    class="regular-text" />
+                                <button type="button" class="sns-eye-btn" onclick="snsToggleVisible(this)" title="보기">👁</button>
+                            </span></td>
                         </tr>
                         <tr>
                             <th>Access Token</th>
-                            <td><input type="text" name="sns_scheduler_options[twitter_access_token]"
-                                value="<?php echo esc_attr( $options['twitter_access_token'] ?? '' ); ?>"
-                                class="regular-text" /></td>
+                            <td><span class="sns-secret-wrap">
+                                <input type="password" name="sns_scheduler_options[twitter_access_token]"
+                                    value="<?php echo esc_attr( $options['twitter_access_token'] ?? '' ); ?>"
+                                    class="regular-text" />
+                                <button type="button" class="sns-eye-btn" onclick="snsToggleVisible(this)" title="보기">👁</button>
+                            </span></td>
                         </tr>
                         <tr>
                             <th>Access Token Secret</th>
-                            <td><input type="password" name="sns_scheduler_options[twitter_access_secret]"
-                                value="<?php echo esc_attr( $options['twitter_access_secret'] ?? '' ); ?>"
-                                class="regular-text" /></td>
+                            <td><span class="sns-secret-wrap">
+                                <input type="password" name="sns_scheduler_options[twitter_access_secret]"
+                                    value="<?php echo esc_attr( $options['twitter_access_secret'] ?? '' ); ?>"
+                                    class="regular-text" />
+                                <button type="button" class="sns-eye-btn" onclick="snsToggleVisible(this)" title="보기">👁</button>
+                            </span></td>
                         </tr>
                         <tr>
                             <th>공유 문구 템플릿</th>
@@ -85,9 +105,12 @@
                     <table class="form-table">
                         <tr>
                             <th>Access Token</th>
-                            <td><input type="text" name="sns_scheduler_options[threads_access_token]"
-                                value="<?php echo esc_attr( $options['threads_access_token'] ?? '' ); ?>"
-                                class="regular-text" /></td>
+                            <td><span class="sns-secret-wrap">
+                                <input type="password" name="sns_scheduler_options[threads_access_token]"
+                                    value="<?php echo esc_attr( $options['threads_access_token'] ?? '' ); ?>"
+                                    class="regular-text" />
+                                <button type="button" class="sns-eye-btn" onclick="snsToggleVisible(this)" title="보기">👁</button>
+                            </span></td>
                         </tr>
                         <tr>
                             <th>Threads User ID</th>
@@ -129,9 +152,12 @@
                     <table class="form-table">
                         <tr>
                             <th>Access Token</th>
-                            <td><input type="text" name="sns_scheduler_options[pinterest_access_token]"
-                                value="<?php echo esc_attr( $options['pinterest_access_token'] ?? '' ); ?>"
-                                class="regular-text" /></td>
+                            <td><span class="sns-secret-wrap">
+                                <input type="password" name="sns_scheduler_options[pinterest_access_token]"
+                                    value="<?php echo esc_attr( $options['pinterest_access_token'] ?? '' ); ?>"
+                                    class="regular-text" />
+                                <button type="button" class="sns-eye-btn" onclick="snsToggleVisible(this)" title="보기">👁</button>
+                            </span></td>
                         </tr>
                         <tr>
                             <th>Board ID (선택)</th>
@@ -173,9 +199,12 @@
                     <table class="form-table">
                         <tr>
                             <th>Page Access Token</th>
-                            <td><input type="text" name="sns_scheduler_options[facebook_page_access_token]"
-                                value="<?php echo esc_attr( $options['facebook_page_access_token'] ?? '' ); ?>"
-                                class="regular-text" /></td>
+                            <td><span class="sns-secret-wrap">
+                                <input type="password" name="sns_scheduler_options[facebook_page_access_token]"
+                                    value="<?php echo esc_attr( $options['facebook_page_access_token'] ?? '' ); ?>"
+                                    class="regular-text" />
+                                <button type="button" class="sns-eye-btn" onclick="snsToggleVisible(this)" title="보기">👁</button>
+                            </span></td>
                         </tr>
                         <tr>
                             <th>Facebook Page ID</th>
