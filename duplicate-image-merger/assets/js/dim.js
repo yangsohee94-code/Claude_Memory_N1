@@ -508,11 +508,12 @@
     // ═══════════════════════════════════
     // ③ 대표이미지 없는 글
     // ═══════════════════════════════════
-    var $progNt = null;
+    var $progNt  = null;
+    var ntFound  = 0;
 
     function loadNoThumb(append) {
         $progNt = $('#dim-progress-nothumb');
-        if (!append) { ntOffset = 0; $('#dim-nothumb-list').empty(); }
+        if (!append) { ntOffset = 0; ntFound = 0; $('#dim-nothumb-list').empty(); }
         prog($progNt, 0, 0, '불러오는 중');
         post('get_no_thumb_posts', { limit:50, offset:ntOffset }, function(err, d){
             hideProg($progNt);
@@ -521,13 +522,14 @@
             $('#dim-nothumb-count').text(d.total);
             $('#dim-nothumb-summary').show();
 
-            var tmpl = $('#dim-nothumb-item-tmpl').html();
+            var tmpl     = $('#dim-nothumb-item-tmpl').html();
             var adminUrl = DIM.admin_url;
-            var ntNum = ntOffset;
-            d.items.forEach(function(item){
+            var prevNt   = ntFound;
+            ntFound     += d.items.length;
+            d.items.forEach(function(item, i){
                 var editUrl = adminUrl+'post.php?post='+item.ID+'&action=edit';
                 $('#dim-nothumb-list').append(tmpl
-                    .replace(/\{\{num\}\}/g,       ++ntNum)
+                    .replace(/\{\{num\}\}/g,       prevNt + i + 1)
                     .replace(/\{\{title\}\}/g,     esc(item.post_title || '(제목 없음)'))
                     .replace(/\{\{type\}\}/g,       item.post_type === 'page' ? '페이지' : '글')
                     .replace(/\{\{date\}\}/g,       (item.post_date||'').slice(0,10))
@@ -674,18 +676,20 @@
             var adminUrl = DIM.admin_url;
             d.items.forEach(function(item, i) {
                 var editUrl = item.edit_url || (adminUrl + 'post.php?post=' + item.id + '&action=edit');
-                var brokenHtml = (item.broken_ids && item.broken_ids.length)
+                var brokenCount = (item.broken_ids && item.broken_ids.length) ? item.broken_ids.length : 0;
+                var brokenHtml  = brokenCount
                     ? item.broken_ids.map(function(bid) {
                         return '<span class="dim-broken-id-badge">이미지 ID ' + bid + '</span>';
                       }).join(' ')
                     : '';
                 $('#dim-brokenimg-list').append(tmpl
-                    .replace(/\{\{num\}\}/g,           prevFound + i + 1)
-                    .replace(/\{\{title\}\}/g,          esc(item.title || '(제목 없음)'))
-                    .replace(/\{\{type\}\}/g,           item.type === 'page' ? '페이지' : '글')
-                    .replace(/\{\{date\}\}/g,           (item.date || '').slice(0, 10))
-                    .replace(/\{\{edit_url\}\}/g,        editUrl)
-                    .replace(/\{\{broken_ids_html\}\}/g, brokenHtml)
+                    .replace(/\{\{num\}\}/g,            prevFound + i + 1)
+                    .replace(/\{\{title\}\}/g,           esc(item.title || '(제목 없음)'))
+                    .replace(/\{\{type\}\}/g,            item.type === 'page' ? '페이지' : '글')
+                    .replace(/\{\{date\}\}/g,            (item.date || '').slice(0, 10))
+                    .replace(/\{\{edit_url\}\}/g,         editUrl)
+                    .replace(/\{\{broken_count\}\}/g,    brokenCount)
+                    .replace(/\{\{broken_ids_html\}\}/g,  brokenHtml)
                 );
             });
 

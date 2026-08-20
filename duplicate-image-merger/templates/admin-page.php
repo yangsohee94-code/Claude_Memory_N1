@@ -321,6 +321,7 @@
     <span class="dim-nt-type">{{type}}</span>
     <a href="{{edit_url}}" target="_blank"><strong>{{title}}</strong></a>
     <span class="dim-muted">{{date}}</span>
+    <span class="dim-err-count">⚠ 이미지 오류 {{broken_count}}개</span>
     <span class="dim-broken-ids">{{broken_ids_html}}</span>
 </div>
 </script>
