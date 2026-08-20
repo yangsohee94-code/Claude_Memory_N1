@@ -315,6 +315,8 @@
     wp.hooks.addFilter( 'editor.BlockEdit', 'quick-image-insert/heading-button', withHeadingButton );
 
     // ── HOC 2: 이미지 블록 툴바에 자유 자르기 버튼 ──────────────────
+    var ToolbarGroup = wp.components.ToolbarGroup;
+
     var withCropButton = createHigherOrderComponent(
         function ( OriginalComponent ) {
             return function QiiCropWrapper( props ) {
@@ -322,24 +324,27 @@
                     return el( OriginalComponent, props );
                 }
 
-                var capturedUrl      = props.attributes.url;
-                var capturedId       = props.attributes.id;
-                var capturedClientId = props.clientId;
-                var capturedAlt      = props.attributes.alt;
+                var url      = props.attributes && props.attributes.url;
+                var id       = props.attributes && props.attributes.id;
+                var alt      = props.attributes && props.attributes.alt;
+                var clientId = props.clientId;
 
                 return el(
                     Fragment, null,
                     el( OriginalComponent, props ),
-                    props.isSelected && el(
-                        BlockControls, null,
-                        el( ToolbarButton, {
-                            icon      : 'scissors',
-                            label     : '자유 자르기',
-                            showTooltip: true,
-                            onClick   : function () {
-                                openCropModal( capturedUrl, capturedId, capturedClientId, capturedAlt );
-                            },
-                        } )
+                    el(
+                        BlockControls, { group: 'other' },
+                        el(
+                            ToolbarGroup, null,
+                            el( ToolbarButton, {
+                                icon      : 'scissors',
+                                label     : '자유 자르기',
+                                showTooltip: true,
+                                onClick   : function () {
+                                    openCropModal( url, id, clientId, alt );
+                                },
+                            } )
+                        )
                     )
                 );
             };
