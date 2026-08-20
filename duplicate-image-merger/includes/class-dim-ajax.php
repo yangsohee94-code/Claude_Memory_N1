@@ -8,7 +8,7 @@ class DIM_Ajax {
             'scan', 'enrich', 'merge', 'auto_merge', 'convert_webp', 'fix_thumbnails',
             'schedule', 'get_counts',
             'get_stats', 'get_no_thumb_posts', 'get_nonwebp', 'delete_images', 'scan_unused',
-            'get_broken_img_posts', 'get_h2_no_img_posts',
+            'get_broken_img_posts', 'get_h2_no_img_posts', 'crop_image',
         ];
         foreach ( $actions as $a ) {
             add_action( "wp_ajax_dim_{$a}", [ $this, "handle_{$a}" ] );
@@ -209,6 +209,91 @@ class DIM_Ajax {
             'total_images'  => $total_images,
             'total_nonwebp' => $total_nonwebp,
         ] );
+    }
+
+    public function handle_crop_image() {
+        $this->auth();
+        @set_time_limit( 60 );
+
+        $id = absint( $_POST['id'] ?? 0 );
+        $x  = max( 0, (int)( $_POST['x'] ?? 0 ) );
+        $y  = max( 0, (int)( $_POST['y'] ?? 0 ) );
+        $w  = max( 1, (int)( $_POST['w'] ?? 0 ) );
+        $h  = max( 1, (int)( $_POST['h'] ?? 0 ) );
+
+        if ( ! $id ) wp_send_json_error( [ 'message' => '잘못된 ID' ] );
+
+        $file = get_attached_file( $id );
+        if ( ! $file || ! file_exists( $file ) ) {
+            wp_send_json_error( [ 'message' => '파일을 찾을 수 없습니다: ' . basename( $file ) ] );
+        }
+
+        $mime   = get_post_mime_type( $id );
+        $result = $this->do_crop( $file, $mime, $x, $y, $w, $h );
+        if ( $result !== true ) {
+            wp_send_json_error( [ 'message' => $result ] );
+        }
+
+        // 메타데이터(썸네일 포함) 재생성
+        $meta = wp_generate_attachment_metadata( $id, $file );
+        wp_update_attachment_metadata( $id, $meta );
+
+        // 브라우저 캐시 무력화를 위해 URL에 버전 파라미터 추가
+        $url = add_query_arg( 'v', time(), wp_get_attachment_url( $id ) );
+
+        wp_send_json_success( [ 'message' => '자르기 완료', 'url' => $url, 'w' => $w, 'h' => $h ] );
+    }
+
+    private function do_crop( string $file, string $mime, int $x, int $y, int $w, int $h ) {
+        if ( extension_loaded( 'imagick' ) ) {
+            try {
+                $img = new Imagick( $file );
+                $iw  = $img->getImageWidth();
+                $ih  = $img->getImageHeight();
+                $x   = min( $x, $iw - 1 );
+                $y   = min( $y, $ih - 1 );
+                $w   = min( $w, $iw - $x );
+                $h   = min( $h, $ih - $y );
+                $img->cropImage( $w, $h, $x, $y );
+                $img->setImagePage( $w, $h, 0, 0 );
+                $img->writeImage( $file );
+                $img->destroy();
+                return true;
+            } catch ( \Throwable $e ) {}
+        }
+
+        if ( $mime === 'image/jpeg' )      $src = @imagecreatefromjpeg( $file );
+        elseif ( $mime === 'image/png' )   $src = @imagecreatefrompng( $file );
+        elseif ( $mime === 'image/webp' )  $src = @imagecreatefromwebp( $file );
+        elseif ( $mime === 'image/gif' )   $src = @imagecreatefromgif( $file );
+        else return '지원하지 않는 형식: ' . $mime;
+
+        if ( ! $src ) return '이미지 로드 실패';
+
+        $iw = imagesx( $src );
+        $ih = imagesy( $src );
+        $x  = min( $x, $iw - 1 );
+        $y  = min( $y, $ih - 1 );
+        $w  = min( $w, $iw - $x );
+        $h  = min( $h, $ih - $y );
+
+        $dst = imagecreatetruecolor( $w, $h );
+        if ( in_array( $mime, [ 'image/png', 'image/webp', 'image/gif' ] ) ) {
+            imagealphablending( $dst, false );
+            imagesavealpha( $dst, true );
+            imagefill( $dst, 0, 0, imagecolorallocatealpha( $dst, 0, 0, 0, 127 ) );
+        }
+        imagecopy( $dst, $src, 0, 0, $x, $y, $w, $h );
+        imagedestroy( $src );
+
+        if ( $mime === 'image/jpeg' )     $ok = @imagejpeg( $dst, $file, 90 );
+        elseif ( $mime === 'image/png' )  $ok = @imagepng( $dst, $file );
+        elseif ( $mime === 'image/webp' ) $ok = @imagewebp( $dst, $file, 82 );
+        elseif ( $mime === 'image/gif' )  $ok = @imagegif( $dst, $file );
+        else                              $ok = false;
+        imagedestroy( $dst );
+
+        return $ok ? true : '파일 저장 실패';
     }
 
     private function auth() {

@@ -249,6 +249,26 @@
     <div id="dim-notice" style="display:none;" class="dim-notice"></div>
 </div>
 
+<!-- 이미지 자르기 모달 -->
+<div id="dim-crop-modal" style="display:none;">
+    <div id="dim-crop-dialog">
+        <h3>✂ 이미지 자르기 <button id="dim-crop-close">×</button></h3>
+        <div id="dim-crop-img-wrap">
+            <img id="dim-crop-img" src="" alt="">
+            <div id="dim-crop-sel"></div>
+        </div>
+        <div id="dim-crop-footer">
+            <span id="dim-crop-info">드래그하여 자를 영역을 선택하세요</span>
+            <button id="dim-crop-apply" class="button button-primary" disabled>자르기 적용</button>
+            <button id="dim-crop-cancel" class="button">취소</button>
+        </div>
+        <div id="dim-crop-progress" class="dim-progress-wrap" style="display:none;">
+            <div class="dim-progress-inner"><div class="dim-progress-bar" style="width:60%;"></div></div>
+            <span class="dim-progress-text">저장 중...</span>
+        </div>
+    </div>
+</div>
+
 <!-- 그룹 템플릿 -->
 <script type="text/html" id="dim-group-tmpl">
 <div class="dim-group" data-group-idx="{{idx}}">
@@ -289,6 +309,7 @@
         <span class="dim-muted">{{type}} · {{size}} · {{date}}</span>
         <span class="dim-muted">ID: {{id}}</span>
     </div>
+    <button class="button button-small dim-btn-crop dim-open-crop" data-id="{{id}}" data-url="{{url}}">✂ 자르기</button>
     <a href="{{edit_url}}" target="_blank" class="button button-small">편집</a>
 </div>
 </script>

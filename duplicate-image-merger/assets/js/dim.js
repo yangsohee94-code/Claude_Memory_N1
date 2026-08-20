@@ -782,6 +782,123 @@
     }
 
     // ═══════════════════════════════════
+    // ✂ 이미지 자르기
+    // ═══════════════════════════════════
+    var cropId      = 0;
+    var cropStartX  = 0, cropStartY = 0;
+    var cropSelecting = false;
+    var cropSel     = { x: 0, y: 0, w: 0, h: 0 };
+
+    function openCropModal(id, url) {
+        cropId = id;
+        cropSel = { x: 0, y: 0, w: 0, h: 0 };
+        cropSelecting = false;
+        var $img = $('#dim-crop-img');
+        $img.attr('src', url);
+        $('#dim-crop-sel').hide().css({ left: 0, top: 0, width: 0, height: 0 });
+        $('#dim-crop-info').text('드래그하여 자를 영역을 선택하세요');
+        $('#dim-crop-apply').prop('disabled', true);
+        $('#dim-crop-progress').hide();
+        $('#dim-crop-modal').show();
+    }
+
+    function closeCropModal() {
+        cropSelecting = false;
+        $('#dim-crop-modal').hide();
+    }
+
+    // 드래그 선택
+    $('#dim-crop-img-wrap').on('mousedown', function(e) {
+        e.preventDefault();
+        var offset = $(this).offset();
+        var ww = $(this).width(), wh = $(this).height();
+        cropStartX = Math.max(0, Math.min(e.pageX - offset.left, ww));
+        cropStartY = Math.max(0, Math.min(e.pageY - offset.top,  wh));
+        cropSelecting = true;
+        cropSel = { x: 0, y: 0, w: 0, h: 0 };
+        $('#dim-crop-sel').css({ left: cropStartX, top: cropStartY, width: 0, height: 0 }).show();
+        $('#dim-crop-apply').prop('disabled', true);
+        $('#dim-crop-info').text('드래그 중...');
+    });
+
+    $(document).on('mousemove.dimcrop', function(e) {
+        if (!cropSelecting) return;
+        var $wrap  = $('#dim-crop-img-wrap');
+        var offset = $wrap.offset();
+        var ww = $wrap.width(), wh = $wrap.height();
+        var mx = Math.max(0, Math.min(e.pageX - offset.left, ww));
+        var my = Math.max(0, Math.min(e.pageY - offset.top,  wh));
+
+        var sx = Math.min(mx, cropStartX);
+        var sy = Math.min(my, cropStartY);
+        var sw = Math.abs(mx - cropStartX);
+        var sh = Math.abs(my - cropStartY);
+
+        $('#dim-crop-sel').css({ left: sx, top: sy, width: sw, height: sh });
+
+        var img = $('#dim-crop-img')[0];
+        if (img && img.naturalWidth && sw > 0 && sh > 0) {
+            var scaleX = img.naturalWidth  / img.offsetWidth;
+            var scaleY = img.naturalHeight / img.offsetHeight;
+            cropSel = {
+                x: Math.round(sx * scaleX), y: Math.round(sy * scaleY),
+                w: Math.round(sw * scaleX), h: Math.round(sh * scaleY)
+            };
+            $('#dim-crop-info').text(cropSel.w + ' × ' + cropSel.h + ' px');
+        }
+    }).on('mouseup.dimcrop', function() {
+        if (!cropSelecting) return;
+        cropSelecting = false;
+        if (cropSel.w > 5 && cropSel.h > 5) {
+            $('#dim-crop-apply').prop('disabled', false);
+        } else {
+            $('#dim-crop-info').text('너무 작은 영역입니다. 다시 드래그하세요.');
+        }
+    });
+
+    // 터치 지원 (모바일)
+    $('#dim-crop-img-wrap').on('touchstart', function(e) {
+        var t = e.originalEvent.touches[0];
+        $(this).trigger($.Event('mousedown', { pageX: t.pageX, pageY: t.pageY }));
+    }).on('touchmove', function(e) {
+        e.preventDefault();
+        var t = e.originalEvent.touches[0];
+        $(document).trigger($.Event('mousemove.dimcrop', { pageX: t.pageX, pageY: t.pageY }));
+    }).on('touchend', function() {
+        $(document).trigger('mouseup.dimcrop');
+    });
+
+    $('#dim-crop-apply').on('click', function() {
+        if (!cropId || !cropSel.w || !cropSel.h) return;
+        $('#dim-crop-progress').show();
+        $('#dim-crop-apply, #dim-crop-cancel').prop('disabled', true);
+        post('crop_image', { id: cropId, x: cropSel.x, y: cropSel.y, w: cropSel.w, h: cropSel.h }, function(err, d) {
+            $('#dim-crop-progress').hide();
+            $('#dim-crop-apply, #dim-crop-cancel').prop('disabled', false);
+            if (err) {
+                $('#dim-crop-info').css('color', '#d63638').text('오류: ' + (err.message || ''));
+            } else {
+                // 목록에서 해당 이미지 썸네일 갱신
+                $('img').filter(function() {
+                    return this.src && this.src.indexOf('id=' + cropId) !== -1 ||
+                           $(this).closest('[data-id="' + cropId + '"]').length;
+                }).attr('src', d.url);
+                notice('자르기 완료 — ' + d.w + '×' + d.h + ' px', true);
+                closeCropModal();
+            }
+        });
+    });
+
+    $('#dim-crop-close, #dim-crop-cancel').on('click', closeCropModal);
+    $('#dim-crop-modal').on('click', function(e) {
+        if ($(e.target).is('#dim-crop-modal')) closeCropModal();
+    });
+
+    $(document).on('click', '.dim-open-crop', function() {
+        openCropModal($(this).data('id'), $(this).data('url'));
+    });
+
+    // ═══════════════════════════════════
     // ④ 용량 현황
     // ═══════════════════════════════════
     function loadStats() {

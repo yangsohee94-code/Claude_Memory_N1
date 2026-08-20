@@ -186,6 +186,36 @@
 .dim-notice.dim-err { border-color: #d63638; background: #fcf0f1; }
 .dim-muted { color: #646970; font-size: 12px; }
 
+/* 자르기 모달 */
+#dim-crop-modal {
+    position: fixed; inset: 0; z-index: 100000;
+    background: rgba(0,0,0,.82);
+    display: flex; align-items: center; justify-content: center;
+}
+#dim-crop-dialog {
+    background: #fff; border-radius: 8px; padding: 20px;
+    display: flex; flex-direction: column; gap: 14px;
+    max-width: 92vw; box-shadow: 0 8px 32px rgba(0,0,0,.4);
+}
+#dim-crop-dialog h3 { margin: 0; font-size: 15px; display: flex; justify-content: space-between; align-items: center; }
+#dim-crop-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #646970; line-height: 1; padding: 0 4px; }
+#dim-crop-close:hover { color: #d63638; }
+#dim-crop-img-wrap {
+    position: relative; display: inline-block;
+    cursor: crosshair; user-select: none;
+    border: 1px solid #dcdcde; line-height: 0;
+    max-width: 72vw; overflow: hidden;
+}
+#dim-crop-img { display: block; max-width: 72vw; max-height: 62vh; }
+#dim-crop-sel {
+    position: absolute; display: none; pointer-events: none;
+    border: 2px solid #2271b1;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,.45);
+}
+#dim-crop-footer { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+#dim-crop-info { flex: 1; font-size: 12px; color: #646970; }
+.dim-btn-crop { background: #6f42c1 !important; color: #fff !important; border-color: #6f42c1 !important; }
+
 @media (max-width: 782px) {
     .dim-item { width: 100%; border-right: none; }
 }
