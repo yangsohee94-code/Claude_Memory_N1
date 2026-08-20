@@ -4,106 +4,85 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class DIM_Ajax {
 
     public function init() {
-        add_action( 'wp_ajax_dim_scan',        [ $this, 'handle_scan' ] );
-        add_action( 'wp_ajax_dim_merge',       [ $this, 'handle_merge' ] );
-        add_action( 'wp_ajax_dim_auto_merge',  [ $this, 'handle_auto_merge' ] );
-        add_action( 'wp_ajax_dim_check_usage', [ $this, 'handle_check_usage' ] );
-        add_action( 'wp_ajax_dim_schedule_auto', [ $this, 'handle_schedule_auto' ] );
-    }
-
-    // --- 스캔 ---
-    public function handle_scan() {
-        $this->verify_nonce();
-        $offset = absint( $_POST['offset'] ?? 0 );
-        $batch  = absint( $_POST['batch']  ?? 200 );
-
-        $scanner = new DIM_Scanner();
-        $result  = $scanner->scan_duplicates( $batch, $offset );
-        wp_send_json_success( $result );
-    }
-
-    // --- 수동 병합 ---
-    public function handle_merge() {
-        $this->verify_nonce();
-
-        $keep_id    = absint( $_POST['keep_id'] ?? 0 );
-        $delete_ids = array_map( 'absint', (array) ( $_POST['delete_ids'] ?? [] ) );
-
-        if ( ! $keep_id || empty( $delete_ids ) ) {
-            wp_send_json_error( [ 'message' => '잘못된 요청입니다.' ] );
+        $actions = [ 'scan', 'merge', 'auto_merge', 'convert_webp', 'fix_thumbnails', 'schedule' ];
+        foreach ( $actions as $a ) {
+            add_action( "wp_ajax_dim_{$a}", [ $this, "handle_{$a}" ] );
         }
-
-        $merger = new DIM_Merger();
-        $result = $merger->merge( $keep_id, $delete_ids );
-        wp_send_json_success( $result );
     }
 
-    // --- 자동 병합 (전체) ---
+    public function handle_scan() {
+        $this->auth();
+        $scanner = new DIM_Scanner();
+        wp_send_json_success( $scanner->scan_duplicates(
+            absint( $_POST['batch']  ?? 200 ),
+            absint( $_POST['offset'] ?? 0 )
+        ) );
+    }
+
+    public function handle_merge() {
+        $this->auth();
+        $keep_id    = absint( $_POST['keep_id'] ?? 0 );
+        $delete_ids = array_map( 'absint', (array)( $_POST['delete_ids'] ?? [] ) );
+        if ( ! $keep_id || ! $delete_ids ) wp_send_json_error( [ 'message' => '잘못된 요청' ] );
+        wp_send_json_success( ( new DIM_Merger() )->merge( $keep_id, $delete_ids ) );
+    }
+
     public function handle_auto_merge() {
-        $this->verify_nonce();
+        $this->auth();
+        $groups = $_POST['groups'] ?? [];
+        if ( empty( $groups ) ) wp_send_json_error( [ 'message' => '그룹 없음' ] );
 
         $scanner = new DIM_Scanner();
         $merger  = new DIM_Merger();
-
-        $groups  = $_POST['groups'] ?? [];
-        if ( empty( $groups ) ) {
-            wp_send_json_error( [ 'message' => '병합할 그룹이 없습니다.' ] );
-        }
-
-        $total_merged = 0;
-        $all_errors   = [];
+        $merged  = 0;
+        $errors  = [];
 
         foreach ( $groups as $group ) {
-            $items = array_map( function( $item ) use ( $scanner ) {
+            foreach ( $group['items'] as &$item ) {
                 $item['id']      = absint( $item['id'] );
                 $item['is_used'] = $scanner->is_image_in_use( $item['id'] );
-                return $item;
-            }, $group['items'] );
-
-            $group['items'] = $items;
-            $r = $merger->auto_merge_group( $group );
-            $total_merged += $r['merged'];
-            $all_errors    = array_merge( $all_errors, $r['errors'] );
-        }
-
-        wp_send_json_success( [
-            'merged' => $total_merged,
-            'errors' => $all_errors,
-        ] );
-    }
-
-    // --- 사용 중 여부 확인 ---
-    public function handle_check_usage() {
-        $this->verify_nonce();
-        $id      = absint( $_POST['attachment_id'] ?? 0 );
-        $scanner = new DIM_Scanner();
-        wp_send_json_success( [
-            'attachment_id' => $id,
-            'is_used'       => $scanner->is_image_in_use( $id ),
-        ] );
-    }
-
-    // --- 자동 병합 스케줄 등록/해제 ---
-    public function handle_schedule_auto() {
-        $this->verify_nonce();
-        $action = sanitize_key( $_POST['schedule_action'] ?? 'enable' );
-
-        if ( $action === 'enable' ) {
-            if ( ! wp_next_scheduled( 'dim_auto_merge_cron' ) ) {
-                wp_schedule_event( time(), 'daily', 'dim_auto_merge_cron' );
             }
-            wp_send_json_success( [ 'message' => '자동 병합이 매일 실행되도록 설정되었습니다.' ] );
+            $r       = $merger->auto_merge_group( $group );
+            $merged += $r['merged'];
+            $errors  = array_merge( $errors, $r['errors'] );
+        }
+
+        wp_send_json_success( [ 'merged' => $merged, 'errors' => $errors ] );
+    }
+
+    public function handle_convert_webp() {
+        $this->auth();
+        $converter = new DIM_Converter();
+        if ( ! $converter->can_convert() ) {
+            wp_send_json_error( [ 'message' => '이 서버는 WebP 변환을 지원하지 않습니다 (GD/Imagick 필요).' ] );
+        }
+        wp_send_json_success( $converter->convert_all(
+            absint( $_POST['batch']  ?? 30 ),
+            absint( $_POST['offset'] ?? 0 )
+        ) );
+    }
+
+    public function handle_fix_thumbnails() {
+        $this->auth();
+        wp_send_json_success( ( new DIM_Thumbnail() )->fix_all() );
+    }
+
+    public function handle_schedule() {
+        $this->auth();
+        $on = filter_var( $_POST['enable'] ?? true, FILTER_VALIDATE_BOOLEAN );
+        if ( $on ) {
+            if ( ! wp_next_scheduled( 'dim_optimize_cron' ) ) {
+                wp_schedule_event( time(), 'daily', 'dim_optimize_cron' );
+            }
+            wp_send_json_success( [ 'message' => '매일 자동 최적화가 예약되었습니다.' ] );
         } else {
-            wp_clear_scheduled_hook( 'dim_auto_merge_cron' );
-            wp_send_json_success( [ 'message' => '자동 병합 예약이 해제되었습니다.' ] );
+            wp_clear_scheduled_hook( 'dim_optimize_cron' );
+            wp_send_json_success( [ 'message' => '자동 최적화 예약이 해제되었습니다.' ] );
         }
     }
 
-    private function verify_nonce() {
-        if ( ! check_ajax_referer( 'dim_nonce', 'nonce', false ) ) {
-            wp_send_json_error( [ 'message' => '보안 검증 실패' ], 403 );
-        }
-        if ( ! current_user_can( 'manage_options' ) ) {
+    private function auth() {
+        if ( ! check_ajax_referer( 'dim_nonce', 'nonce', false ) || ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( [ 'message' => '권한 없음' ], 403 );
         }
     }

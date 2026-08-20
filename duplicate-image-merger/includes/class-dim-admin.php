@@ -4,50 +4,27 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class DIM_Admin {
 
     public function init() {
-        add_action( 'admin_menu', [ $this, 'register_menu' ] );
+        add_action( 'admin_menu',            [ $this, 'register_menu' ] );
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
-        // 자동 병합 크론
-        add_action( 'dim_auto_merge_cron', [ $this, 'run_auto_merge_cron' ] );
+        add_action( 'dim_optimize_cron',     [ $this, 'run_cron' ] );
     }
 
     public function register_menu() {
-        add_media_page(
-            '중복 이미지 병합',
-            '중복 이미지 병합',
-            'manage_options',
-            'duplicate-image-merger',
-            [ $this, 'render_page' ]
-        );
+        add_media_page( '중복 이미지 병합 & 최적화', '중복 이미지 병합', 'manage_options',
+            'duplicate-image-merger', [ $this, 'render_page' ] );
     }
 
     public function enqueue_assets( $hook ) {
         if ( $hook !== 'media_page_duplicate-image-merger' ) return;
 
-        wp_enqueue_style(
-            'dim-style',
-            DIM_PLUGIN_URL . 'assets/css/dim.css',
-            [],
-            DIM_VERSION
-        );
-        wp_enqueue_script(
-            'dim-script',
-            DIM_PLUGIN_URL . 'assets/js/dim.js',
-            [ 'jquery' ],
-            DIM_VERSION,
-            true
-        );
+        wp_enqueue_style(  'dim-style',  DIM_PLUGIN_URL . 'assets/css/dim.css', [], DIM_VERSION );
+        wp_enqueue_script( 'dim-script', DIM_PLUGIN_URL . 'assets/js/dim.js', [ 'jquery' ], DIM_VERSION, true );
         wp_localize_script( 'dim-script', 'DIM', [
-            'ajax_url' => admin_url( 'admin-ajax.php' ),
-            'nonce'    => wp_create_nonce( 'dim_nonce' ),
-            'i18n'     => [
-                'scanning'       => '스캔 중...',
-                'merging'        => '병합 중...',
-                'auto_merging'   => '자동 병합 중...',
-                'confirm_merge'  => '선택한 이미지를 병합하시겠습니까? 삭제된 이미지는 복구할 수 없습니다.',
-                'confirm_auto'   => '사용 중인 이미지를 기준으로 모든 중복 이미지를 자동 병합하시겠습니까?',
-                'no_selection'   => '병합할 이미지를 하나 이상 선택해주세요.',
-                'select_keep'    => '유지할 이미지를 선택해주세요.',
-            ],
+            'ajax_url'   => admin_url( 'admin-ajax.php' ),
+            'nonce'      => wp_create_nonce( 'dim_nonce' ),
+            'can_webp'   => ( new DIM_Converter() )->can_convert(),
+            'cron_on'    => (bool) wp_next_scheduled( 'dim_optimize_cron' ),
+            'last_run'   => get_option( 'dim_last_cron_run', '' ),
         ] );
     }
 
@@ -56,25 +33,38 @@ class DIM_Admin {
     }
 
     /**
-     * 크론으로 자동 병합 실행
+     * 통합 크론: 중복 병합 → WebP 변환 → 대표이미지 정합성 수정
      */
-    public function run_auto_merge_cron() {
-        $scanner = new DIM_Scanner();
-        $merger  = new DIM_Merger();
+    public function run_cron() {
+        $scanner   = new DIM_Scanner();
+        $merger    = new DIM_Merger();
+        $converter = new DIM_Converter();
+        $thumbnail = new DIM_Thumbnail();
 
-        $total   = $scanner->get_total_images();
-        $offset  = 0;
-        $batch   = 200;
-
-        while ( $offset < $total ) {
-            $result = $scanner->scan_duplicates( $batch, $offset );
-            foreach ( $result['duplicates'] as $group ) {
+        // 1. 중복 병합
+        $offset = 0;
+        while ( true ) {
+            $r = $scanner->scan_duplicates( 200, $offset );
+            foreach ( $r['duplicates'] as $group ) {
                 $merger->auto_merge_group( $group );
             }
-            if ( ! $result['has_more'] ) break;
-            $offset += $batch;
+            if ( ! $r['has_more'] ) break;
+            $offset += 200;
         }
 
-        update_option( 'dim_last_auto_merge', current_time( 'mysql' ) );
+        // 2. WebP 변환
+        if ( $converter->can_convert() ) {
+            $offset = 0;
+            while ( true ) {
+                $r = $converter->convert_all( 50, $offset );
+                if ( ! $r['has_more'] ) break;
+                $offset += 50;
+            }
+        }
+
+        // 3. 대표이미지 정합성
+        $thumbnail->fix_all();
+
+        update_option( 'dim_last_cron_run', current_time( 'mysql' ) );
     }
 }
