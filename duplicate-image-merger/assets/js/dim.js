@@ -102,16 +102,31 @@
         });
     }
 
+    var ENRICH_BATCH = 25;
+
     function enrichGroups(scanned) {
         if (!rawGroups.length) {
             renderDuplicates(scanned, []);
             return;
         }
-        prog($progDup, 0, 0, '사용 여부 확인 중 (중복 '+rawGroups.length+'그룹)');
-        post('enrich', { groups: rawGroups }, function(err, data){
-            if (err) return notice('상세조회 실패: '+(err.message||''), false);
-            renderDuplicates(scanned, data.groups || []);
-        });
+        var enriched = [];
+
+        function enrichBatch(offset) {
+            prog(getProgDup(), offset, rawGroups.length, '사용 여부 확인 중');
+            var slice = rawGroups.slice(offset, offset + ENRICH_BATCH);
+            post('enrich', { groups: slice }, function(err, data){
+                if (err) return notice('상세조회 실패: '+(err.message||''), false);
+                enriched = enriched.concat(data.groups || []);
+                var next = offset + ENRICH_BATCH;
+                if (next < rawGroups.length) {
+                    enrichBatch(next);
+                } else {
+                    renderDuplicates(scanned, enriched);
+                }
+            });
+        }
+
+        enrichBatch(0);
     }
 
     function renderDuplicates(scanned, enriched) {
