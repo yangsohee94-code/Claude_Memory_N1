@@ -108,13 +108,27 @@ class DIM_Merger {
 
     private function replace_meta_id( $old_id, $new_id ) {
         global $wpdb;
-        // 갤러리 숏코드 등 메타에 첨부 ID 직접 저장된 경우
+        $old = (string) $old_id;
+        $new = (string) $new_id;
+
+        // ① 정확히 일치하는 경우 (썸네일 외 단순 ID 참조)
+        $wpdb->update( $wpdb->postmeta, [ 'meta_value' => $new ], [ 'meta_value' => $old ] );
+
+        // ② 쉼표 구분 목록 (갤러리 숏코드 등) — ,old, / old, / ,old 패턴만 교체
+        //    LIKE '%5%'는 '15','50' 등 오염 위험이 있으므로 쉼표 포함 패턴 사용
         $wpdb->query( $wpdb->prepare(
             "UPDATE {$wpdb->postmeta}
-             SET meta_value = REPLACE(meta_value, %s, %s)
-             WHERE meta_value LIKE %s",
-            (string) $old_id, (string) $new_id,
-            '%' . $wpdb->esc_like( (string) $old_id ) . '%'
+             SET meta_value =
+                 REPLACE(REPLACE(REPLACE(meta_value, %s, %s), %s, %s), %s, %s)
+             WHERE meta_value LIKE %s
+                OR meta_value LIKE %s
+                OR meta_value LIKE %s",
+            ",{$old},", ",{$new},",
+            "{$old},"  , "{$new},",
+            ",{$old}"  , ",{$new}",
+            '%,' . $wpdb->esc_like( $old ) . ',%',
+            $wpdb->esc_like( $old ) . ',%',
+            '%,' . $wpdb->esc_like( $old )
         ) );
     }
 }

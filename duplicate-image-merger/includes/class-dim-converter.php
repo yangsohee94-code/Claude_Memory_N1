@@ -104,6 +104,11 @@ class DIM_Converter {
             $img = @imagecreatefromjpeg( $src );
         } elseif ( $mime === 'image/png' ) {
             $img = @imagecreatefrompng( $src );
+            if ( $img ) {
+                // PNG 알파채널 보존
+                imagealphablending( $img, false );
+                imagesavealpha( $img, true );
+            }
         } elseif ( $mime === 'image/gif' ) {
             $img = @imagecreatefromgif( $src );
         } else {

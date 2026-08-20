@@ -17,6 +17,7 @@
     function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
     function prog($wrap, done, total, label) {
+        if (!$wrap || !$wrap.length) return;
         var pct  = total > 0 ? Math.min(99, Math.round(done/total*100)) : 50;
         var text = total > 0
             ? label+' · '+done.toLocaleString()+' / '+total.toLocaleString()+'개 ('+pct+'%)'
@@ -24,7 +25,7 @@
         $wrap.show().find('.dim-progress-bar').css('width', pct+'%');
         $wrap.find('.dim-progress-text').text(text);
     }
-    function hideProg($wrap){ setTimeout(function(){ $wrap.hide(); }, 700); }
+    function hideProg($wrap){ if ($wrap && $wrap.length) setTimeout(function(){ $wrap.hide(); }, 700); }
 
     function notice(msg, ok) {
         var $n = $('#dim-notice').removeClass('dim-ok dim-err')
@@ -391,6 +392,7 @@
         var ids = $('.dim-nw-checkbox:checked').map(function(){ return this.value; }).get();
         if (!ids.length) return;
         if (!confirm('선택한 '+ids.length+'개 이미지를 완전히 삭제합니다. 복구 불가합니다.')) return;
+        if (!$progWebp || !$progWebp.length) $progWebp = $('#dim-progress-webp');
         prog($progWebp, 0, 0, '삭제 중');
         post('delete_images', { ids:ids }, function(err, d){
             hideProg($progWebp);

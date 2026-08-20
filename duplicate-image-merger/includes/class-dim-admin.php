@@ -53,13 +53,12 @@ class DIM_Admin {
             $offset += 200;
         }
 
-        // 2. WebP 변환
+        // 2. WebP 변환 — 변환 후 mime_type이 webp로 바뀌므로 항상 offset=0
         if ( $converter->can_convert() ) {
-            $offset = 0;
             while ( true ) {
-                $r = $converter->convert_all( 50, $offset );
-                if ( ! $r['has_more'] ) break;
-                $offset += 50;
+                $r = $converter->convert_all( 50, 0 );
+                $nothing_done = ( $r['converted'] === 0 && $r['skipped'] === 0 && empty( $r['errors'] ) );
+                if ( ! $r['has_more'] || $nothing_done ) break;
             }
         }
 

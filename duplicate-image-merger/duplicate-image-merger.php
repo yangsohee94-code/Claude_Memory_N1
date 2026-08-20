@@ -3,7 +3,7 @@
  * Plugin Name: Duplicate Image Merger
  * Plugin URI:  https://github.com/yangsohee94-code/claude_memory_n1
  * Description: 중복 이미지 병합 · WebP 변환 · 대표이미지 정합성 자동 최적화
- * Version:     1.2.6
+ * Version:     1.2.8
  * Author:      Claude Memory N1
  * License:     GPL-2.0+
  * Text Domain: duplicate-image-merger
@@ -11,7 +11,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'DIM_VERSION',    '1.2.7' );
+define( 'DIM_VERSION',    '1.2.8' );
 define( 'DIM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DIM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -48,10 +48,8 @@ add_filter( 'auth_cookie_expiration', function ( $expiration, $user_id, $remembe
     return $expiration;
 }, 10, 3 );
 
-add_action( 'login_form', function () {
-    // 로그인 폼에서 "로그인 상태 유지" 기본 체크
-    add_filter( 'login_form_defaults', function ( $defaults ) {
-        $defaults['rememberme'] = true;
-        return $defaults;
-    } );
+// login_form_defaults는 login_form 액션보다 먼저 실행되므로 직접 등록해야 함
+add_filter( 'login_form_defaults', function ( $defaults ) {
+    $defaults['rememberme'] = true;
+    return $defaults;
 } );
