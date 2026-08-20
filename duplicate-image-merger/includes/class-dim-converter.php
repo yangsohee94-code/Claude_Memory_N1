@@ -22,13 +22,14 @@ class DIM_Converter {
             $batch, $offset
         ) );
 
-        $result = [ 'converted' => 0, 'skipped' => 0, 'errors' => [], 'has_more' => count( $ids ) === $batch ];
+        $result = [ 'converted' => 0, 'skipped' => 0, 'errors' => [], 'unlink_failed' => 0, 'has_more' => count( $ids ) === $batch ];
 
         foreach ( $ids as $id ) {
             $r = $this->convert_to_webp( (int) $id );
-            if ( $r === true )       $result['converted']++;
-            elseif ( $r === 'skip' ) $result['skipped']++;
-            else                     $result['errors'][] = "ID {$id}: {$r}";
+            if ( $r === true )            $result['converted']++;
+            elseif ( $r === 'skip' )      $result['skipped']++;
+            elseif ( $r === 'unlink' )  { $result['converted']++; $result['unlink_failed']++; }
+            else                          $result['errors'][] = "ID {$id}: {$r}";
         }
 
         return $result;
@@ -76,8 +77,8 @@ class DIM_Converter {
             $old_url, $new_url, '%' . $wpdb->esc_like( basename( $file ) ) . '%'
         ) );
 
-        // 원본 삭제
-        @unlink( $file );
+        // 원본 삭제 — 실패해도 변환 자체는 성공으로 처리 (별도 카운터)
+        if ( ! @unlink( $file ) ) return 'unlink';
 
         return true;
     }

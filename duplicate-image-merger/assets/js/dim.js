@@ -69,12 +69,9 @@
     // ═══════════════════════════════════
     var $progDup = null;
 
-    var rawGroups = [];   // 스캔 단계: {hash, ids[]} 목록
-
     function startScan() {
         $progDup = $('#dim-progress-dup');
-        groups    = [];
-        rawGroups = [];
+        groups   = [];
         $('#dim-results').empty();
         $('#dim-select-all-wrap, #dim-summary').hide();
         $('#dim-notice').hide();
@@ -88,77 +85,19 @@
         });
     }
 
+    // 스캔 결과가 이미 enriched 형태로 옴 — 별도 enrich 단계 없음
     function scanBatch(offset, scanned) {
         var total = totalImages || Math.max(offset + 100, scanned + 100);
-        prog($progDup, scanned, total, '해시 스캔 중');
+        prog($progDup, scanned, total, '스캔 중');
         post('scan', { offset: offset, batch: 100 }, function(err, data){
             if (err) return notice('스캔 실패: '+(err.message||''), false);
-            data.duplicates.forEach(function(g){ rawGroups.push(g); });
+            // duplicates는 이미 {hash, items[], count} 형태
+            data.duplicates.forEach(function(g){ groups.push(g); });
             var done = scanned + data.total_scanned;
-            prog($progDup, done, totalImages || done + (data.has_more ? 100 : 0), '해시 스캔 중');
+            prog($progDup, done, totalImages || done + (data.has_more ? 100 : 0), '스캔 중');
             if (data.has_more) { scanBatch(offset + 100, done); return; }
-            // 스캔 완료 → 중복 그룹 상세정보 조회
-            enrichGroups(done);
+            renderDuplicates(done, groups);
         });
-    }
-
-    var ENRICH_BATCH = 20;
-    var ENRICH_TIMEOUT = 30000; // 30초 타임아웃
-
-    function enrichGroups(scanned) {
-        if (!rawGroups.length) {
-            renderDuplicates(scanned, []);
-            return;
-        }
-        var enriched = [];
-        var failCount = 0;
-
-        function enrichBatch(offset) {
-            prog(getProgDup(), offset, rawGroups.length, '사용 여부 확인 중');
-            var slice = rawGroups.slice(offset, offset + ENRICH_BATCH);
-            var next  = offset + ENRICH_BATCH;
-
-            var timer = setTimeout(function () {
-                // 타임아웃: 이 배치를 건너뛰고 is_used=false로 기본값 처리
-                failCount++;
-                var fallback = slice.map(function(g){
-                    return { hash: g.hash, count: g.ids.length, items: g.ids.map(function(id){
-                        return { id: id, file_size: 0, url: '', is_used: false, title: 'ID '+id, date: '' };
-                    })};
-                });
-                enriched = enriched.concat(fallback);
-                if (next < rawGroups.length) { enrichBatch(next); } else { finish(); }
-            }, ENRICH_TIMEOUT);
-
-            $.post(DIM.ajax_url, $.extend({ action:'dim_enrich', nonce:DIM.nonce }, { groups: slice }))
-                .always(function(r, status){
-                    clearTimeout(timer);
-                    var data = (status === 'success' && r && r.success) ? r.data : null;
-                    if (data && data.groups) {
-                        enriched = enriched.concat(data.groups);
-                    } else {
-                        // 실패: 기본값으로 채우고 계속 진행
-                        failCount++;
-                        slice.forEach(function(g){
-                            enriched.push({ hash: g.hash, count: g.ids.length, items: g.ids.map(function(id){
-                                return { id: id, file_size: 0, url: '', is_used: false, title: 'ID '+id, date: '' };
-                            })});
-                        });
-                    }
-                    if (next < rawGroups.length) { enrichBatch(next); } else { finish(); }
-                });
-        }
-
-        function finish() {
-            if (failCount > 0) {
-                $('#dim-progress-dup .dim-progress-text').text(
-                    '⚠ '+failCount+'배치 조회 실패 — 나머지 결과 표시 중'
-                );
-            }
-            renderDuplicates(scanned, enriched);
-        }
-
-        enrichBatch(0);
     }
 
     function renderDuplicates(scanned, enriched) {
@@ -242,12 +181,39 @@
     }
 
     function autoMerge() {
-        if (!groups.length || !confirm('사용 중인 이미지 기준으로 전체 자동 병합합니다.')) return;
-        prog(getProgDup(), 0, 0, '자동 병합 중');
-        post('auto_merge', { groups:groups }, function(err, d){
+        if (!groups.length || !confirm('사용 중인 이미지 기준으로 전체 자동 병합합니다. 50그룹씩 순차 처리됩니다.')) return;
+
+        var BATCH = 50;
+        var batches = [];
+        for (var i = 0; i < groups.length; i += BATCH) {
+            batches.push(groups.slice(i, i + BATCH));
+        }
+
+        var totalMerged = 0, totalErrors = [];
+        var done = 0;
+        prog(getProgDup(), done, batches.length, '자동 병합 중');
+
+        var chain = $.when();
+        batches.forEach(function(batch) {
+            chain = chain.then(function() {
+                return $.post(DIM.ajax_url, { action: 'dim_auto_merge', nonce: DIM.nonce, groups: batch })
+                    .done(function(r) {
+                        if (r.success) {
+                            totalMerged += r.data.merged || 0;
+                            totalErrors  = totalErrors.concat(r.data.errors || []);
+                        }
+                        prog(getProgDup(), ++done, batches.length, '자동 병합 중');
+                    })
+                    .fail(function() {
+                        prog(getProgDup(), ++done, batches.length, '자동 병합 중');
+                    });
+            });
+        });
+        chain.always(function() {
             hideProg(getProgDup());
-            err ? notice(err.message, false)
-                : notice(d.merged+'개 병합 완료.', true);
+            var msg = totalMerged + '개 병합 완료';
+            if (totalErrors.length) msg += ' · 실패 ' + totalErrors.length + '개';
+            notice(msg, totalErrors.length === 0);
             startScan();
         });
     }
@@ -325,36 +291,61 @@
     function convertSelected() {
         var ids = $('.dim-nw-checkbox:checked').map(function(){ return this.value; }).get();
         if (!ids.length) return;
-        if (!confirm(ids.length+'개 이미지를 WebP로 변환합니다.')) return;
+        if (!confirm(ids.length+'개 이미지를 WebP로 변환합니다. 50개씩 순차 처리됩니다.')) return;
 
+        var totals = { converted: 0, skipped: 0, errors: 0, unlink_failed: 0 };
         var done = 0;
         prog($progWebp, done, ids.length, 'WebP 변환 중');
         var chain = $.when();
-        ids.forEach(function(id){
-            chain = chain.then(function(){
-                return $.post(DIM.ajax_url, { action:'dim_convert_webp', nonce:DIM.nonce, single_id:id })
-                    .done(function(){ prog($progWebp, ++done, ids.length, 'WebP 변환 중'); });
+        ids.forEach(function(id) {
+            chain = chain.then(function() {
+                return $.post(DIM.ajax_url, { action:'dim_convert_webp', nonce:DIM.nonce, single_id: id })
+                    .done(function(r) {
+                        if (r.success) {
+                            totals.converted     += r.data.converted     || 0;
+                            totals.skipped       += r.data.skipped       || 0;
+                            totals.errors        += (r.data.errors       || []).length;
+                            totals.unlink_failed += r.data.unlink_failed || 0;
+                        } else {
+                            totals.errors++;
+                        }
+                    })
+                    .fail(function() { totals.errors++; })
+                    .always(function() { prog($progWebp, ++done, ids.length, 'WebP 변환 중'); });
             });
         });
-        chain.always(function(){ hideProg($progWebp); notice(done+'개 변환 완료.', true); loadNonWebp(false); });
+        chain.always(function() {
+            hideProg($progWebp);
+            var msg = '변환 완료: 성공 ' + totals.converted + '개 · 건너뜀 ' + totals.skipped + '개';
+            if (totals.unlink_failed) msg += ' · 원본삭제 실패 ' + totals.unlink_failed + '개';
+            if (totals.errors) msg += ' · 오류 ' + totals.errors + '개';
+            notice(msg, totals.errors === 0);
+            loadNonWebp(false);
+        });
     }
 
     function convertAll() {
         if (!DIM.can_webp) return notice('이 서버는 WebP 변환을 지원하지 않습니다 (GD 또는 Imagick 필요).', false);
-        if (!confirm('전체 이미지를 WebP로 변환합니다. 원본 파일은 삭제됩니다.')) return;
-        var converted = 0;
-        webpBatch(0, converted);
+        if (!confirm('전체 이미지를 WebP로 변환합니다. 50개씩 순차 처리되며 원본 파일은 삭제됩니다.')) return;
+        var totals = { converted: 0, skipped: 0, errors: 0, unlink_failed: 0 };
+        webpBatch(0, totals);
     }
 
-    function webpBatch(offset, converted) {
-        var total = totalNonWebp || (offset+30);
-        prog($progWebp, converted, total, 'WebP 변환 중');
-        post('convert_webp', { offset:offset, batch:30 }, function(err, d){
-            if (err) return notice(err.message, false);
-            converted += d.converted;
-            if (d.has_more) { webpBatch(offset+30, converted); return; }
+    function webpBatch(offset, totals) {
+        var total = totalNonWebp || (offset + 50);
+        prog($progWebp, offset, total, 'WebP 변환 중 (성공 ' + totals.converted + '개)');
+        post('convert_webp', { offset: offset, batch: 50 }, function(err, d) {
+            if (err) return notice('변환 오류: ' + (err.message || ''), false);
+            totals.converted     += d.converted     || 0;
+            totals.skipped       += d.skipped       || 0;
+            totals.errors        += (d.errors       || []).length;
+            totals.unlink_failed += d.unlink_failed || 0;
+            if (d.has_more) { webpBatch(offset + 50, totals); return; }
             hideProg($progWebp);
-            notice('WebP 변환 완료: '+converted+'개 변환, '+d.skipped+'개 건너뜀.', true);
+            var msg = 'WebP 변환 완료: 성공 ' + totals.converted + '개 · 건너뜀 ' + totals.skipped + '개';
+            if (totals.unlink_failed) msg += ' · 원본삭제 실패 ' + totals.unlink_failed + '개';
+            if (totals.errors) msg += ' · 오류 ' + totals.errors + '개';
+            notice(msg, totals.errors === 0);
             loadNonWebp(false);
         });
     }

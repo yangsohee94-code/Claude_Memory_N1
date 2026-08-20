@@ -3,135 +3,127 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 class DIM_Scanner {
 
-    // 세션 내 캐시: 썸네일 ID 목록 (한 번만 로드)
     private $thumbnail_ids = null;
 
     /**
-     * 스캔: MD5 해시만으로 중복 그룹 구성. is_used 체크 없음 (속도 최적화)
+     * 스캔 + 즉시 enrich 통합: 중복 발견 시 같은 배치에서 메타 bulk 조회
+     * 별도 enrich 단계 없음 — AJAX 호출 수 = 스캔 배치 수만
      */
     public function scan_duplicates( $batch_size = 100, $offset = 0 ) {
         @set_time_limit( 120 );
-
         global $wpdb;
 
-        $attachments = $wpdb->get_results( $wpdb->prepare(
+        // ① 배치 내 이미지 ID 목록 (1 쿼리)
+        $ids = $wpdb->get_col( $wpdb->prepare(
             "SELECT ID FROM {$wpdb->posts}
-             WHERE post_type = 'attachment'
-               AND post_mime_type LIKE 'image/%'
-             ORDER BY ID ASC
-             LIMIT %d OFFSET %d",
+             WHERE post_type = 'attachment' AND post_mime_type LIKE 'image/%'
+             ORDER BY ID ASC LIMIT %d OFFSET %d",
             $batch_size, $offset
         ) );
 
-        $hash_map = [];
-
-        foreach ( $attachments as $att ) {
-            $file = get_attached_file( $att->ID );
-            if ( ! $file || ! file_exists( $file ) ) continue;
-
-            $hash = md5_file( $file );
-            if ( ! $hash ) continue;
-
-            $hash_map[ $hash ][] = (int) $att->ID;
+        if ( empty( $ids ) ) {
+            return [ 'duplicates' => [], 'total_scanned' => 0, 'has_more' => false ];
         }
 
-        // 중복(2개 이상)인 ID 목록만 반환 — is_used는 이 단계에서 하지 않음
-        $duplicates = [];
-        foreach ( $hash_map as $hash => $ids ) {
-            if ( count( $ids ) >= 2 ) {
-                $duplicates[] = [ 'hash' => $hash, 'ids' => $ids ];
+        $id_list = implode( ',', array_map( 'intval', $ids ) );
+
+        // ② 파일 경로 bulk 조회 — get_attached_file() 100회 대신 1 쿼리
+        $upload   = wp_upload_dir();
+        $base_dir = trailingslashit( $upload['basedir'] );
+        $base_url = trailingslashit( $upload['baseurl'] );
+
+        $file_rows = $wpdb->get_results(
+            "SELECT post_id, meta_value FROM {$wpdb->postmeta}
+             WHERE post_id IN ($id_list) AND meta_key = '_wp_attached_file'"
+        );
+        $file_map = [];
+        $url_map  = [];
+        foreach ( $file_rows as $m ) {
+            $pid             = (int) $m->post_id;
+            $file_map[ $pid ] = $base_dir . $m->meta_value;
+            $url_map[ $pid ]  = $base_url . $m->meta_value;
+        }
+
+        // ③ MD5 해시 계산 (파일 읽기 — 피할 수 없음)
+        $hash_map = [];
+        foreach ( $ids as $id ) {
+            $id   = (int) $id;
+            $file = $file_map[ $id ] ?? null;
+            if ( ! $file ) continue;
+            $hash = @md5_file( $file );   // 파일 없으면 false 반환
+            if ( ! $hash ) continue;
+            $hash_map[ $hash ][] = $id;
+        }
+
+        // 중복 없으면 메타 조회 생략하고 바로 반환
+        $dup_ids = [];
+        foreach ( $hash_map as $dup ) {
+            if ( count( $dup ) >= 2 ) {
+                foreach ( $dup as $id ) $dup_ids[] = $id;
             }
         }
 
-        return [
-            'duplicates'    => $duplicates,
-            'total_scanned' => count( $attachments ),
-            'has_more'      => count( $attachments ) === $batch_size,
-        ];
-    }
-
-    /**
-     * 중복 그룹 ID 목록 → 상세 정보(is_used 포함) 한꺼번에 조회
-     * 3개의 bulk 쿼리만 사용 — 개별 WP API 호출 없음
-     */
-    public function enrich_groups( array $groups ) {
-        if ( empty( $groups ) ) return [];
-
-        global $wpdb;
-
-        $all_ids = [];
-        foreach ( $groups as $g ) {
-            foreach ( $g['ids'] as $id ) $all_ids[] = (int) $id;
+        if ( empty( $dup_ids ) ) {
+            return [
+                'duplicates'    => [],
+                'total_scanned' => count( $ids ),
+                'has_more'      => count( $ids ) === $batch_size,
+            ];
         }
-        $all_ids = array_unique( $all_ids );
 
-        // 안전한 정수 목록 (prepare 대신 intval 사용)
-        $id_list = implode( ',', $all_ids );
+        $dup_list = implode( ',', $dup_ids );
 
-        // ① 게시물 제목·날짜·URL (1 쿼리)
+        // ④ 중복 이미지 제목·날짜 bulk 조회 (1 쿼리)
         $post_rows = $wpdb->get_results(
-            "SELECT ID, post_title, post_date, guid
-             FROM {$wpdb->posts} WHERE ID IN ($id_list)"
+            "SELECT ID, post_title, post_date FROM {$wpdb->posts} WHERE ID IN ($dup_list)"
         );
         $post_map = [];
         foreach ( $post_rows as $r ) {
             $post_map[ (int) $r->ID ] = $r;
         }
 
-        // ② URL (_wp_attached_file, 1 쿼리) — 파일시스템 미사용
-        $upload   = wp_upload_dir();
-        $base_url = trailingslashit( $upload['baseurl'] );
-
-        $file_rows = $wpdb->get_results(
-            "SELECT post_id, meta_value
-             FROM {$wpdb->postmeta}
-             WHERE post_id IN ($id_list) AND meta_key = '_wp_attached_file'"
-        );
-        $url_map = [];
-        foreach ( $file_rows as $m ) {
-            $url_map[ (int) $m->post_id ] = $base_url . $m->meta_value;
-        }
-
-        // ③ 파일 크기 (_wp_attachment_metadata, 1 쿼리) — 파일시스템 미사용
+        // ⑤ 파일 크기 bulk 조회 (1 쿼리, WP 6.0+ 기준 filesize 키)
         $size_rows = $wpdb->get_results(
-            "SELECT post_id, meta_value
-             FROM {$wpdb->postmeta}
-             WHERE post_id IN ($id_list) AND meta_key = '_wp_attachment_metadata'"
+            "SELECT post_id, meta_value FROM {$wpdb->postmeta}
+             WHERE post_id IN ($dup_list) AND meta_key = '_wp_attachment_metadata'"
         );
         $size_map = [];
         foreach ( $size_rows as $m ) {
             $data = maybe_unserialize( $m->meta_value );
-            // filesize key: WordPress 6.0+; fallback 0
             $size_map[ (int) $m->post_id ] = isset( $data['filesize'] ) ? (int) $data['filesize'] : 0;
         }
 
-        // ④ 썸네일로 사용 중인 ID (1 쿼리)
+        // ⑥ 썸네일 사용 여부 (1 쿼리, 인스턴스 내 캐시)
         $thumb_used = $this->get_thumbnail_ids();
 
-        $enriched = [];
-        foreach ( $groups as $g ) {
+        // 결과 조합 — 이미 완전히 enriched된 형태
+        $duplicates = [];
+        foreach ( $hash_map as $hash => $dup ) {
+            if ( count( $dup ) < 2 ) continue;
             $items = [];
-            foreach ( $g['ids'] as $id ) {
-                $id   = (int) $id;
-                $post = $post_map[ $id ] ?? null;
-
+            foreach ( $dup as $id ) {
+                $post    = $post_map[ $id ] ?? null;
                 $items[] = [
                     'id'        => $id,
-                    'file_size' => $size_map[ $id ] ?? 0,
                     'url'       => $url_map[ $id ] ?? '',
+                    'file_size' => $size_map[ $id ] ?? 0,
                     'is_used'   => in_array( $id, $thumb_used, true ),
-                    'title'     => $post ? $post->post_title : '',
+                    'title'     => $post ? $post->post_title : 'ID ' . $id,
                     'date'      => $post ? substr( $post->post_date, 0, 16 ) : '',
                 ];
             }
-            $enriched[] = [
-                'hash'  => $g['hash'],
+            $duplicates[] = [
+                'hash'  => $hash,
                 'items' => $items,
                 'count' => count( $items ),
             ];
         }
 
-        return $enriched;
+        return [
+            'duplicates'    => $duplicates,
+            'total_scanned' => count( $ids ),
+            'has_more'      => count( $ids ) === $batch_size,
+        ];
     }
 
     /**
@@ -153,8 +145,6 @@ class DIM_Scanner {
             '%' . $wpdb->esc_like( $url ) . '%'
         ) );
     }
-
-    // ── 내부 헬퍼 ──
 
     private function get_thumbnail_ids(): array {
         if ( $this->thumbnail_ids !== null ) return $this->thumbnail_ids;

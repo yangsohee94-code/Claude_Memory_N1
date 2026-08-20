@@ -84,8 +84,26 @@ class DIM_Ajax {
         if ( ! $converter->can_convert() ) {
             wp_send_json_error( [ 'message' => '이 서버는 WebP 변환을 지원하지 않습니다 (GD/Imagick 필요).' ] );
         }
+
+        // 단건 변환 (JS convertSelected에서 single_id로 호출)
+        $single_id = absint( $_POST['single_id'] ?? 0 );
+        if ( $single_id ) {
+            $r = $converter->convert_to_webp( $single_id );
+            if ( $r === true ) {
+                wp_send_json_success( [ 'converted' => 1, 'skipped' => 0, 'errors' => [], 'unlink_failed' => 0 ] );
+            } elseif ( $r === 'unlink' ) {
+                wp_send_json_success( [ 'converted' => 1, 'skipped' => 0, 'errors' => [], 'unlink_failed' => 1 ] );
+            } elseif ( $r === 'skip' ) {
+                wp_send_json_success( [ 'converted' => 0, 'skipped' => 1, 'errors' => [], 'unlink_failed' => 0 ] );
+            } else {
+                wp_send_json_success( [ 'converted' => 0, 'skipped' => 0, 'errors' => [ "ID {$single_id}: {$r}" ], 'unlink_failed' => 0 ] );
+            }
+            return;
+        }
+
+        // 배치 변환 (전체 변환 버튼, 50개씩)
         wp_send_json_success( $converter->convert_all(
-            absint( $_POST['batch']  ?? 30 ),
+            absint( $_POST['batch']  ?? 50 ),
             absint( $_POST['offset'] ?? 0 )
         ) );
     }
