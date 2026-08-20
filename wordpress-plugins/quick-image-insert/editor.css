@@ -1,0 +1,49 @@
+/* ================================================================
+   Quick Image Insert — 불필요한 툴바 버튼 숨기기
+   ================================================================ */
+
+/* ── 1. ✦ AI 도우미 버튼 (스크린샷에서 확인된 정확한 aria-label) ── */
+button[aria-label="AI 도우미"] {
+    display: none !important;
+}
+
+/* ── 2. Rank Math Content AI 버튼 (@ai 원형 아이콘) ─────────────── */
+button[aria-label="Rank Math AI"],
+button[aria-label="Content AI"],
+button[aria-label*="Rank Math"],
+[class*="rank-math-content-ai"],
+[class*="rank-math-ai-toolbar"],
+/* SVG 기반으로 삽입되는 경우 부모 버튼까지 숨기기 */
+.components-toolbar-button:has(svg[class*="rank-math"]),
+.components-toolbar-button:has(img[src*="rank-math"]) {
+    display: none !important;
+}
+
+/* ── 3. 텍스트 정렬 버튼 그룹 (≡ 계열) ──────────────────────────── */
+button[aria-label="텍스트 정렬"],
+button[aria-label="왼쪽 정렬"],
+button[aria-label="가운데 정렬"],
+button[aria-label="오른쪽 정렬"],
+/* 정렬 버튼을 감싼 그룹 전체 */
+.block-editor-block-toolbar__slot .components-toolbar-group:has(button[aria-label="텍스트 정렬"]) {
+    display: none !important;
+}
+
+/* ── 4. 이미지 블록: 링크·자르기·텍스트오버레이·alt 버튼 ────────── */
+button[aria-label="이미지 링크"],
+button[aria-label="링크 수정"],
+button[aria-label="링크 삽입"],
+button[aria-label="자르기"],
+button[aria-label="이미지 자르기"],
+button[aria-label="텍스트 오버레이 추가"],
+button[aria-label="텍스트 추가"],
+button[aria-label="대체 텍스트"],
+button[aria-label="대체 텍스트 추가"],
+button[aria-label="대체 텍스트 없음"] {
+    display: none !important;
+}
+
+/* ── 5. 이미지 블록 정렬(≡) — PHP filter 백업용 CSS ────────────── */
+.block-editor-block-alignment-control {
+    display: none !important;
+}
