@@ -49,11 +49,13 @@ class DIM_Converter {
         $webp_file = preg_replace( '/\.(jpe?g|png|gif)$/i', '.webp', $file );
         if ( $webp_file === $file ) return 'skip';
 
-        // 이미 변환된 파일이 있으면 스킵
-        if ( file_exists( $webp_file ) ) return 'skip';
-
-        $ok = $this->do_convert( $file, $webp_file, $mime );
-        if ( $ok !== true ) return $ok;
+        // webp 파일이 이미 디스크에 있으면 변환 생략, DB만 동기화
+        // (이전 실행에서 파일 생성 후 DB 업데이트 실패 시 여기로 진입)
+        $already_exists = file_exists( $webp_file );
+        if ( ! $already_exists ) {
+            $ok = $this->do_convert( $file, $webp_file, $mime );
+            if ( $ok !== true ) return $ok;
+        }
 
         $old_url  = wp_get_attachment_url( $id );
         $new_url  = str_replace( basename( $file ), basename( $webp_file ), $old_url );
@@ -79,7 +81,7 @@ class DIM_Converter {
         ) );
 
         // 원본 삭제 — 실패해도 변환 자체는 성공으로 처리 (별도 카운터)
-        if ( ! @unlink( $file ) ) return 'unlink';
+        if ( file_exists( $file ) && ! @unlink( $file ) ) return 'unlink';
 
         return true;
     }
