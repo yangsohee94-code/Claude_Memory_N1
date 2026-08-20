@@ -217,13 +217,13 @@ class DIM_Stats {
      * 본문에서 이미지 파일명·Gutenberg 블록 ID 인덱스 빌드 (5분 캐시)
      */
     private function build_content_index() {
-        $cached = get_transient( 'dim_content_index' );
+        $cached = get_transient( 'dim_content_index_v2' );
         if ( $cached !== false ) return $cached;
 
         global $wpdb;
         $rows = $wpdb->get_col(
             "SELECT post_content FROM {$wpdb->posts}
-             WHERE post_status IN ('publish','draft','private','inherit')
+             WHERE post_status IN ('publish','draft','private','inherit','future','pending')
                AND (post_content LIKE '%/uploads/%' OR post_content LIKE '%\"id\":%')"
         );
 
@@ -240,7 +240,7 @@ class DIM_Stats {
         }
 
         $result = [ 'filenames' => $filenames, 'ids' => $ids ];
-        set_transient( 'dim_content_index', $result, 5 * MINUTE_IN_SECONDS );
+        set_transient( 'dim_content_index_v2', $result, 5 * MINUTE_IN_SECONDS );
         return $result;
     }
 
