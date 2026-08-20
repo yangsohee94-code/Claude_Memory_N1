@@ -137,6 +137,16 @@ class DIM_Converter {
         } elseif ( $mime === 'image/png' ) {
             $img = @imagecreatefrompng( $src );
             if ( $img ) {
+                // 팔레트(Indexed) 모드 PNG는 imagewebp() 실패 → 트루컬러로 변환
+                if ( ! imageistruecolor( $img ) ) {
+                    $tc = imagecreatetruecolor( imagesx( $img ), imagesy( $img ) );
+                    imagealphablending( $tc, false );
+                    imagesavealpha( $tc, true );
+                    imagefill( $tc, 0, 0, imagecolorallocatealpha( $tc, 0, 0, 0, 127 ) );
+                    imagecopy( $tc, $img, 0, 0, 0, 0, imagesx( $img ), imagesy( $img ) );
+                    imagedestroy( $img );
+                    $img = $tc;
+                }
                 imagealphablending( $img, false );
                 imagesavealpha( $img, true );
             }
