@@ -66,7 +66,14 @@ class DIM_Ajax {
     public function handle_convert_webp() {
         $this->auth();
         $converter = new DIM_Converter();
-        if ( ! $converter->can_convert() ) {
+
+        // can_convert()는 실제 파일 쓰기 테스트를 하므로 5분 캐싱
+        $cap = get_transient( 'dim_can_webp' );
+        if ( $cap === false ) {
+            $cap = $converter->can_convert() ? '1' : '0';
+            set_transient( 'dim_can_webp', $cap, 5 * MINUTE_IN_SECONDS );
+        }
+        if ( $cap !== '1' ) {
             wp_send_json_error( [ 'message' => '이 서버는 WebP 변환을 지원하지 않습니다 (GD/Imagick 필요).' ] );
         }
 

@@ -281,28 +281,34 @@ class DIM_Stats {
             $all_ids      = array_keys( $att_to_posts );
             $placeholders = implode( ',', array_fill( 0, count( $all_ids ), '%d' ) );
 
-            // DB에 존재하는 이미지 attachment ID 목록
-            $valid_ids = $wpdb->get_col( $wpdb->prepare(
-                "SELECT ID FROM {$wpdb->posts}
-                 WHERE ID IN ({$placeholders})
-                   AND post_type = 'attachment'
-                   AND post_mime_type LIKE 'image/%%'",
+            // 단일 JOIN 쿼리로 ID 존재 여부 + 파일 경로 동시 조회 (get_attached_file 반복 호출 제거)
+            $rows = $wpdb->get_results( $wpdb->prepare(
+                "SELECT p.ID, m.meta_value AS rel_path
+                 FROM {$wpdb->posts} p
+                 LEFT JOIN {$wpdb->postmeta} m
+                       ON m.post_id = p.ID AND m.meta_key = '_wp_attached_file'
+                 WHERE p.ID IN ({$placeholders})
+                   AND p.post_type = 'attachment'
+                   AND p.post_mime_type LIKE 'image/%%'",
                 ...$all_ids
             ) );
-            $valid_ids = array_map( 'intval', $valid_ids );
 
-            // DB에 없는 ID → 즉시 오류
-            foreach ( array_diff( $all_ids, $valid_ids ) as $missing_id ) {
-                foreach ( $att_to_posts[ $missing_id ] ?? [] as $post_id ) {
-                    $broken_post_ids[ $post_id ] = true;
+            $found_ids     = [];
+            $upload_base   = wp_upload_dir()['basedir'];
+            foreach ( $rows as $row ) {
+                $found_ids[ (int) $row->ID ] = true;
+                $abs = $row->rel_path ? trailingslashit( $upload_base ) . $row->rel_path : '';
+                if ( ! $abs || ! file_exists( $abs ) ) {
+                    foreach ( $att_to_posts[ (int) $row->ID ] ?? [] as $post_id ) {
+                        $broken_post_ids[ $post_id ] = true;
+                    }
                 }
             }
 
-            // DB에 있지만 파일이 없는 경우
-            foreach ( $valid_ids as $vid ) {
-                $file = get_attached_file( $vid );
-                if ( ! $file || ! file_exists( $file ) ) {
-                    foreach ( $att_to_posts[ $vid ] ?? [] as $post_id ) {
+            // DB에 아예 없는 ID → 즉시 오류
+            foreach ( $all_ids as $aid ) {
+                if ( ! isset( $found_ids[ $aid ] ) ) {
+                    foreach ( $att_to_posts[ $aid ] ?? [] as $post_id ) {
                         $broken_post_ids[ $post_id ] = true;
                     }
                 }

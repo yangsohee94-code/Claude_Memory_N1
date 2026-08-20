@@ -435,9 +435,9 @@
             totals.skipped       += batchSkipped;
             totals.errors        += batchErrors;
             totals.unlink_failed += d.unlink_failed || 0;
-            // 실제로 변환·건너뜀이 있을 때만 다음 배치 진행
-            // 오류만 있으면 같은 이미지를 계속 재시도하는 무한루프 방지
-            var madeProgress = (batchConverted + batchSkipped) > 0;
+            // 실제로 변환된 이미지가 있을 때만 다음 배치 진행
+            // skip(파일 없음)이나 오류만 있으면 무한루프 방지 — converted만 진행 기준으로 사용
+            var madeProgress = batchConverted > 0;
             if (d.has_more && madeProgress) { webpBatch(totals); return; }
             var ok  = totals.errors === 0 && totals.converted > 0;
             var msg;
@@ -678,19 +678,19 @@
             });
 
             brokenOffset += 50;
-            $('#dim-brokenimg-more-wrap').toggle(!!d.has_more);
 
-            if (!d.has_more) {
+            if (d.has_more) {
+                prog($progBroken, brokenScanned, 0, '스캔 중');
+                loadBrokenImgPosts(true);  // 자동으로 다음 배치 계속
+            } else {
+                $('#dim-brokenimg-more-wrap').hide();
                 var msg = brokenFound
                     ? brokenScanned + '개 스캔 완료 — 오류 이미지 있는 글 ' + brokenFound + '개'
                     : brokenScanned + '개 스캔 완료 — 이미지 오류 글 없음 ✅';
                 progDone($progBroken, msg, true);
-            } else {
-                prog($progBroken, brokenOffset, 0, '스캔 중');
-            }
-
-            if (!brokenFound && !d.has_more) {
-                $('#dim-brokenimg-list').html('<p style="padding:16px">이미지 오류 글이 없습니다 ✅</p>');
+                if (!brokenFound) {
+                    $('#dim-brokenimg-list').html('<p style="padding:16px">이미지 오류 글이 없습니다 ✅</p>');
+                }
             }
         });
     }
@@ -733,17 +733,19 @@
             });
 
             h2Offset += 50;
-            $('#dim-h2noimg-more-wrap').toggle(!!d.has_more);
 
-            if (!d.has_more) {
+            if (d.has_more) {
+                prog($progH2, h2Scanned, 0, '스캔 중');
+                loadH2NoImgPosts(true);  // 자동으로 다음 배치 계속
+            } else {
+                $('#dim-h2noimg-more-wrap').hide();
                 var msg = h2Found
                     ? h2Scanned + '개 스캔 완료 — H2 이미지 누락 ' + h2Found + '개'
                     : h2Scanned + '개 스캔 완료 — 모든 H2 아래 이미지 있음 ✅';
                 progDone($progH2, msg, true);
-            }
-
-            if (!h2Found && !d.has_more) {
-                $('#dim-h2noimg-list').html('<p style="padding:16px">H2 이미지 누락 글이 없습니다 ✅</p>');
+                if (!h2Found) {
+                    $('#dim-h2noimg-list').html('<p style="padding:16px">H2 이미지 누락 글이 없습니다 ✅</p>');
+                }
             }
         });
     }

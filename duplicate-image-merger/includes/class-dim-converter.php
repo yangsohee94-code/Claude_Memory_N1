@@ -66,7 +66,8 @@ class DIM_Converter {
      */
     public function convert_to_webp( int $id ) {
         $file = get_attached_file( $id );
-        if ( ! $file || ! file_exists( $file ) ) return 'skip';
+        if ( ! $file ) return 'skip';
+        if ( ! file_exists( $file ) ) return '원본 파일 없음: ' . basename( $file );
 
         $mime = get_post_mime_type( $id );
         if ( $mime === 'image/webp' ) return 'skip';
