@@ -2,7 +2,9 @@
 (function ($) {
     'use strict';
 
-    var groups = [];
+    var groups      = [];
+    var totalImages = 0;   // 전체 이미지 수
+    var totalNonWebp = 0;  // WebP 변환 대상 수
 
     // ── 유틸 ──
     function fmt(bytes) {
@@ -12,12 +14,19 @@
     }
     function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-    function progress(pct, text) {
+    function progress(done, total, label) {
+        var pct  = total > 0 ? Math.min(99, Math.round(done / total * 100)) : 5;
+        var text = label + ' · ' + done.toLocaleString() + ' / ' + total.toLocaleString() + '개 (' + pct + '%)';
         $('#dim-progress').show();
-        $('#dim-progress-bar').css('width', pct+'%');
+        $('#dim-progress-bar').css('width', pct + '%');
         $('#dim-progress-text').text(text);
     }
-    function hideProgress(){ setTimeout(function(){ $('#dim-progress').hide(); }, 500); }
+    function progressMsg(msg) {   // 수량 없이 메시지만
+        $('#dim-progress').show();
+        $('#dim-progress-bar').css('width', '50%');
+        $('#dim-progress-text').text(msg);
+    }
+    function hideProgress(){ setTimeout(function(){ $('#dim-progress').hide(); }, 700); }
 
     function notice(msg, ok) {
         $('#dim-notice').removeClass('dim-ok dim-err')
@@ -51,16 +60,23 @@
         $('#dim-select-all-wrap, #dim-summary').hide();
         $('#dim-notice').hide();
         $('#dim-auto-merge-btn, #dim-merge-selected-btn').prop('disabled', true);
-        scanBatch(0);
+
+        progressMsg('이미지 수 확인 중...');
+        post('get_counts', {}, function(err, data){
+            totalImages  = err ? 0 : (data.total_images  || 0);
+            totalNonWebp = err ? 0 : (data.total_nonwebp || 0);
+            scanBatch(0, 0);
+        });
     }
 
-    function scanBatch(offset) {
-        progress(offset ? Math.min(85, Math.round(offset/(offset+200)*85)) : 5, '스캔 중... '+offset+'개 처리됨');
+    function scanBatch(offset, scanned) {
+        progress(offset, totalImages || offset + 200, '스캔 중');
         post('scan', { offset: offset, batch: 200 }, function(err, data){
             if (err) return notice('스캔 실패: '+(err.message||''), false);
             data.duplicates.forEach(function(g){ groups.push(g); });
-            if (data.has_more) { scanBatch(offset+200); return; }
-            renderAll(data.total_scanned);
+            var done = scanned + data.total_scanned;
+            if (data.has_more) { scanBatch(offset + 200, done); return; }
+            renderAll(done);
         });
     }
 
@@ -136,12 +152,17 @@
             if (del.length) calls.push({ keep_id: keep, delete_ids: del });
         });
 
-        progress(10, '병합 중...');
+        var total = calls.length, done = 0;
+        progress(done, total, '병합 중');
         var chain = $.when();
         calls.forEach(function(c){
             chain = chain.then(function(){
                 return $.post(DIM.ajax_url, $.extend({ action:'dim_merge', nonce:DIM.nonce }, c))
-                    .done(function(r){ if(r.success) merged += r.data.merged; });
+                    .done(function(r){
+                        if(r.success) merged += r.data.merged;
+                        done++;
+                        progress(done, total, '병합 중');
+                    });
             });
         });
         chain.always(function(){
@@ -171,26 +192,27 @@
         webpBatch(0, 0);
     }
 
-    function webpBatch(offset, total) {
-        progress(offset ? Math.min(90, Math.round(offset/(offset+30)*90)) : 5, 'WebP 변환 중... '+total+'개 완료');
+    function webpBatch(offset, converted) {
+        var total = totalNonWebp || (offset + 30);
+        progress(converted, total, 'WebP 변환 중');
         post('convert_webp', { offset: offset, batch: 30 }, function(err, d){
-            if (err) { $('#dim-webp-btn').prop('disabled',false); return notice(err.message, false); }
-            total += d.converted;
-            if (d.has_more) { webpBatch(offset+30, total); return; }
+            if (err) { $('#dim-webp-btn').prop('disabled', false); return notice(err.message, false); }
+            converted += d.converted;
+            if (d.has_more) { webpBatch(offset + 30, converted); return; }
             hideProgress();
             $('#dim-webp-btn').prop('disabled', false);
-            notice('WebP 변환 완료: '+total+'개 변환, '+d.skipped+'개 건너뜀.', true);
+            notice('WebP 변환 완료: ' + converted + '개 변환, ' + d.skipped + '개 건너뜀.', true);
         });
     }
 
     // ── 대표이미지 정합성 ──
     function fixThumbnails() {
         if (!confirm('손상된 대표이미지를 자동 수정합니다.')) return;
-        progress(50, '대표이미지 확인 중...');
+        progressMsg('대표이미지 정합성 확인 중... (잠시만 기다려주세요)');
         post('fix_thumbnails', {}, function(err, d){
             hideProgress();
             err ? notice(err.message, false)
-                : notice('대표이미지 수정 완료 — 자동 연결: '+d.fixed+'개, 삭제: '+d.cleared+'개 (총 '+d.total_checked+'개 확인)', true);
+                : notice('대표이미지 수정 완료 — 총 ' + d.total_checked + '개 확인 · 자동 연결: ' + d.fixed + '개 · 삭제: ' + d.cleared + '개', true);
         });
     }
 

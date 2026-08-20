@@ -4,7 +4,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class DIM_Ajax {
 
     public function init() {
-        $actions = [ 'scan', 'merge', 'auto_merge', 'convert_webp', 'fix_thumbnails', 'schedule' ];
+        $actions = [ 'scan', 'merge', 'auto_merge', 'convert_webp', 'fix_thumbnails', 'schedule', 'get_counts' ];
         foreach ( $actions as $a ) {
             add_action( "wp_ajax_dim_{$a}", [ $this, "handle_{$a}" ] );
         }
@@ -91,6 +91,26 @@ class DIM_Ajax {
             $target = strtotime( '+1 day', $target );
         }
         return $target;
+    }
+
+    public function handle_get_counts() {
+        $this->auth();
+        global $wpdb;
+
+        $total_images = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$wpdb->posts}
+             WHERE post_type = 'attachment' AND post_mime_type LIKE 'image/%'"
+        );
+        $total_nonwebp = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$wpdb->posts}
+             WHERE post_type = 'attachment'
+               AND post_mime_type IN ('image/jpeg','image/png','image/gif')"
+        );
+
+        wp_send_json_success( [
+            'total_images'  => $total_images,
+            'total_nonwebp' => $total_nonwebp,
+        ] );
     }
 
     private function auth() {
