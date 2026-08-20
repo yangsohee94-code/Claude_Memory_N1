@@ -277,6 +277,7 @@ class DIM_Stats {
 
         $broken_post_ids  = [];
         $broken_post_imgs = []; // post_id => [att_id, ...]
+        $att_names        = []; // att_id  => filename
 
         if ( ! empty( $att_to_posts ) ) {
             $all_ids      = array_keys( $att_to_posts );
@@ -297,12 +298,16 @@ class DIM_Stats {
             $found_ids   = [];
             $upload_base = wp_upload_dir()['basedir'];
             foreach ( $rows as $row ) {
-                $found_ids[ (int) $row->ID ] = true;
+                $att_id = (int) $row->ID;
+                $found_ids[ $att_id ] = true;
+                if ( $row->rel_path ) {
+                    $att_names[ $att_id ] = basename( $row->rel_path );
+                }
                 $abs = $row->rel_path ? trailingslashit( $upload_base ) . $row->rel_path : '';
                 if ( ! $abs || ! file_exists( $abs ) ) {
-                    foreach ( $att_to_posts[ (int) $row->ID ] ?? [] as $post_id ) {
-                        $broken_post_ids[ $post_id ]              = true;
-                        $broken_post_imgs[ $post_id ][]           = (int) $row->ID;
+                    foreach ( $att_to_posts[ $att_id ] ?? [] as $post_id ) {
+                        $broken_post_ids[ $post_id ]    = true;
+                        $broken_post_imgs[ $post_id ][] = $att_id;
                     }
                 }
             }
@@ -321,13 +326,20 @@ class DIM_Stats {
         $items = [];
         foreach ( $posts as $post ) {
             if ( isset( $broken_post_ids[ $post->ID ] ) ) {
+                $raw_ids    = array_values( array_unique( $broken_post_imgs[ $post->ID ] ?? [] ) );
+                $broken_ids = array_map( function( $id ) use ( $att_names ) {
+                    return [
+                        'id'   => $id,
+                        'name' => $att_names[ $id ] ?? '',
+                    ];
+                }, $raw_ids );
                 $items[] = [
                     'id'         => (int) $post->ID,
                     'title'      => $post->post_title,
                     'type'       => $post->post_type,
                     'date'       => $post->post_date,
                     'edit_url'   => get_edit_post_link( $post->ID, 'raw' ),
-                    'broken_ids' => array_values( array_unique( $broken_post_imgs[ $post->ID ] ?? [] ) ),
+                    'broken_ids' => $broken_ids,
                 ];
             }
         }

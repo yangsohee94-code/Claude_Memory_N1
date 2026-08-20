@@ -667,8 +667,9 @@
         items.forEach(function(item, i) {
             var editUrl    = item.edit_url || (adminUrl + 'post.php?post=' + item.id + '&action=edit');
             var brokenCount = item.broken_ids.length;
-            var brokenHtml  = item.broken_ids.map(function(bid) {
-                return '<span class="dim-broken-id-badge">이미지 ID ' + bid + '</span>';
+            var brokenHtml  = item.broken_ids.map(function(bi) {
+                var label = bi.name ? bi.name : ('ID ' + bi.id);
+                return '<span class="dim-broken-id-badge">' + esc(label) + '</span>';
             }).join(' ');
             $list.append(tmpl
                 .replace(/\{\{num\}\}/g,            i + 1)
