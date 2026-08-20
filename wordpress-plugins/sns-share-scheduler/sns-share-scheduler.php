@@ -19,6 +19,7 @@ define( 'SNS_SCHEDULER_URL', plugin_dir_url( __FILE__ ) );
 
 require_once SNS_SCHEDULER_PATH . 'includes/class-content-generator.php';
 require_once SNS_SCHEDULER_PATH . 'includes/class-scheduler.php';
+require_once SNS_SCHEDULER_PATH . 'includes/class-bulk-schedule.php';
 require_once SNS_SCHEDULER_PATH . 'includes/class-admin.php';
 require_once SNS_SCHEDULER_PATH . 'includes/apis/class-twitter-api.php';
 require_once SNS_SCHEDULER_PATH . 'includes/apis/class-threads-api.php';
@@ -28,6 +29,7 @@ require_once SNS_SCHEDULER_PATH . 'includes/apis/class-facebook-api.php';
 function sns_scheduler_init() {
     new SNS_Admin();
     new SNS_Scheduler();
+    new SNS_Bulk_Schedule();
 }
 add_action( 'plugins_loaded', 'sns_scheduler_init' );
 

@@ -123,6 +123,10 @@ class SNS_Scheduler {
     }
 
     private function get_next_slot( $platform ) {
+        return self::get_next_slot_static( $platform );
+    }
+
+    public static function get_next_slot_static( $platform ) {
         global $wpdb;
         $last = $wpdb->get_var( $wpdb->prepare(
             "SELECT MAX(scheduled_at) FROM {$wpdb->prefix}sns_share_queue
