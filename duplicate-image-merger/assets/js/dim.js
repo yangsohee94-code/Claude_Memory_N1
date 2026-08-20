@@ -34,6 +34,18 @@
         if (off) $('html,body').animate({ scrollTop: off.top - 40 }, 200);
     }
 
+    // ── 자동 병합 중단 재개 지원 (localStorage) ──
+    var DIM_PENDING_KEY = 'dim_pending_merge_' + (DIM.ajax_url || '').replace(/\W/g, '');
+    function savePendingGroups(arr) {
+        try { localStorage.setItem(DIM_PENDING_KEY, JSON.stringify(arr)); } catch(e) {}
+    }
+    function clearPendingGroups() {
+        try { localStorage.removeItem(DIM_PENDING_KEY); } catch(e) {}
+    }
+    function getPendingGroups() {
+        try { var v = localStorage.getItem(DIM_PENDING_KEY); return v ? JSON.parse(v) : null; } catch(e) { return null; }
+    }
+
     function post(action, data, cb) {
         $.ajax({
             url: DIM.ajax_url, type: 'POST', timeout: 90000,
@@ -195,21 +207,24 @@
         });
     }
 
-    function autoMerge() {
-        if (!groups.length || !confirm('사용 중인 이미지 기준으로 전체 자동 병합합니다. 50그룹씩 순차 처리됩니다.')) return;
+    function autoMerge(pendingOverride) {
+        var target = pendingOverride || groups;
+        if (!target.length) return;
+        if (!pendingOverride && !confirm('사용 중인 이미지 기준으로 전체 자동 병합합니다. 50그룹씩 순차 처리됩니다.')) return;
 
         var BATCH = 50;
         var batches = [];
-        for (var i = 0; i < groups.length; i += BATCH) {
-            batches.push(groups.slice(i, i + BATCH));
-        }
+        for (var i = 0; i < target.length; i += BATCH) batches.push(target.slice(i, i + BATCH));
+
+        // 시작 전 전체 그룹 저장 — 중단 시 재개용
+        savePendingGroups(target);
 
         var totalMerged = 0, totalErrors = [];
         var done = 0;
         prog(getProgDup(), done, batches.length, '자동 병합 중');
 
         var chain = $.when();
-        batches.forEach(function(batch) {
+        batches.forEach(function(batch, batchIdx) {
             chain = chain.then(function() {
                 return $.ajax({
                     url: DIM.ajax_url, type: 'POST', timeout: 90000,
@@ -220,6 +235,8 @@
                             totalMerged += r.data.merged || 0;
                             totalErrors  = totalErrors.concat(r.data.errors || []);
                         }
+                        // 완료된 배치 이후 그룹만 남겨 저장 (중단 시 재개 지점)
+                        savePendingGroups(target.slice((batchIdx + 1) * BATCH));
                         prog(getProgDup(), ++done, batches.length, '자동 병합 중');
                     })
                     .fail(function() {
@@ -228,6 +245,7 @@
             });
         });
         chain.always(function() {
+            clearPendingGroups();  // 정상 완료 — 저장 데이터 삭제
             hideProg(getProgDup());
             var msg = totalMerged + '개 병합 완료';
             if (totalErrors.length) msg += ' · 실패 ' + totalErrors.length + '개';
@@ -505,6 +523,30 @@
     // ═══════════════════════════════════
     $(function(){
         initSchedule();
+
+        // 이전 자동 병합 중단 감지 — 재개 안내
+        (function() {
+            var pending = getPendingGroups();
+            if (!pending || !pending.length) return;
+            notice(
+                '⚠ 이전 자동 병합이 중단되었습니다 — <strong>' + pending.length + '개</strong> 그룹이 남아 있습니다. ' +
+                '<button id="dim-resume-btn" class="button button-small" style="margin:0 4px">이어서 진행</button>' +
+                '<button id="dim-resume-cancel-btn" class="button button-small">취소</button>',
+                false
+            );
+            $('#dim-resume-btn').on('click', function() {
+                $('#dim-notice').hide();
+                groups = pending;
+                // 스캔 요약 수치 복원
+                $('#dim-group-count').text(groups.length);
+                $('#dim-auto-merge-btn, #dim-merge-selected-btn').prop('disabled', false);
+                autoMerge(pending);
+            });
+            $('#dim-resume-cancel-btn').on('click', function() {
+                clearPendingGroups();
+                $('#dim-notice').hide();
+            });
+        })();
 
         // 탭 ①
         $('#dim-scan-btn').on('click', startScan);
