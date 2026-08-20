@@ -13,7 +13,7 @@ function qii_enqueue_editor_assets() {
     wp_enqueue_script(
         'quick-image-insert',
         plugin_dir_url( __FILE__ ) . 'editor.js',
-        array( 'wp-blocks', 'wp-element', 'wp-editor', 'wp-components', 'wp-i18n', 'wp-plugins', 'wp-edit-post', 'wp-data', 'wp-block-editor' ),
+        array( 'wp-blocks', 'wp-element', 'wp-editor', 'wp-components', 'wp-i18n', 'wp-plugins', 'wp-edit-post', 'wp-data', 'wp-block-editor', 'wp-hooks', 'wp-dom-ready' ),
         filemtime( plugin_dir_path( __FILE__ ) . 'editor.js' ),
         true
     );
