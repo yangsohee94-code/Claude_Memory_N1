@@ -550,7 +550,7 @@
 
         // 탭 ①
         $('#dim-scan-btn').on('click', startScan);
-        $('#dim-auto-merge-btn').on('click', autoMerge);
+        $('#dim-auto-merge-btn').on('click', function() { autoMerge(); });
         $('#dim-merge-selected-btn').on('click', mergeSelected);
         $('#dim-thumb-btn').on('click', fixThumbnails);
         $('#dim-run-now-btn').on('click', runAll);
