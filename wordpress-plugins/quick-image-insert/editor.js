@@ -6,10 +6,12 @@
     var ToolbarButton            = wp.components.ToolbarButton;
     var createBlock              = wp.blocks.createBlock;
 
-    var ALLOWED = [
-        'core/paragraph', 'core/heading',
-        'core/list', 'core/quote', 'core/pullquote',
-    ];
+    // H2, H3 제목 블록에서만 버튼 표시
+    function isTargetBlock( props ) {
+        return props.name === 'core/heading'
+            && props.attributes
+            && ( props.attributes.level === 2 || props.attributes.level === 3 );
+    }
 
     // ── 이미지 삽입 핸들러 (클릭 시점의 clientId + baseIndex 고정) ─
     function handleImageInsert( clientId, baseIndex ) {
@@ -71,7 +73,7 @@
                     null,
                     el( OriginalComponent, props ),
                     // 선택된 허용 블록에서만 툴바 버튼 표시
-                    props.isSelected && ALLOWED.indexOf( props.name ) !== -1 && el(
+                    props.isSelected && isTargetBlock( props ) && el(
                         BlockControls,
                         null,
                         el( ToolbarButton, {
