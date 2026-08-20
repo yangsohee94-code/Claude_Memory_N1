@@ -309,7 +309,7 @@
                     props.isSelected && isImage && el(
                         BlockControls, null,
                         el( ToolbarButton, {
-                            label  : '자르기',
+                            label  : 'QII-crop',
                             onClick: function () {
                                 openCropModal(
                                     props.attributes && props.attributes.url,
