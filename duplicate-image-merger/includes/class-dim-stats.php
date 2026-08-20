@@ -125,6 +125,126 @@ class DIM_Stats {
     }
 
     /**
+     * 미사용 이미지 목록
+     * 사용 기준: ① _thumbnail_id ② post_parent(기존 글) ③ post_content URL ④ Gutenberg 블록 ID
+     */
+    public function get_unused_images( $limit = 50, $offset = 0 ) {
+        global $wpdb;
+
+        // ① 썸네일로 쓰이는 ID 목록
+        $thumb_ids = $wpdb->get_col(
+            "SELECT DISTINCT CAST(meta_value AS UNSIGNED)
+             FROM {$wpdb->postmeta}
+             WHERE meta_key = '_thumbnail_id' AND meta_value REGEXP '^[0-9]+$'"
+        );
+        $thumb_in = empty( $thumb_ids ) ? '0' : implode( ',', array_map( 'absint', $thumb_ids ) );
+
+        // ② 후보: 썸네일 아님 + (post_parent=0 또는 부모 글이 삭제/휴지통)
+        $candidates = $wpdb->get_results( $wpdb->prepare(
+            "SELECT p.ID, p.post_title, p.post_mime_type, p.post_date
+             FROM {$wpdb->posts} p
+             WHERE p.post_type = 'attachment'
+               AND p.post_mime_type LIKE 'image/%%'
+               AND p.ID NOT IN ({$thumb_in})
+               AND (
+                   p.post_parent = 0
+                   OR NOT EXISTS (
+                       SELECT 1 FROM {$wpdb->posts} pp
+                       WHERE pp.ID = p.post_parent
+                         AND pp.post_status NOT IN ('trash','auto-draft')
+                   )
+               )
+             ORDER BY p.post_date DESC
+             LIMIT %d OFFSET %d",
+            $limit, $offset
+        ) );
+
+        if ( empty( $candidates ) ) {
+            return [ 'items' => [], 'total' => 0, 'total_size' => 0, 'has_more' => false ];
+        }
+
+        // ③ 본문 파일명·Gutenberg ID 캐시 (5분)
+        $content_data   = $this->build_content_index();
+        $used_filenames = $content_data['filenames'];
+        $used_ids       = $content_data['ids'];
+
+        $items = [];
+        foreach ( $candidates as $row ) {
+            $id = (int) $row->ID;
+            if ( isset( $used_ids[ $id ] ) ) continue;
+
+            $file = get_attached_file( $id );
+            if ( ! $file ) continue;
+            if ( isset( $used_filenames[ basename( $file ) ] ) ) continue;
+
+            $items[] = [
+                'id'        => $id,
+                'title'     => $row->post_title,
+                'type'      => str_replace( 'image/', '', $row->post_mime_type ),
+                'url'       => wp_get_attachment_image_url( $id, 'thumbnail' ) ?: wp_get_attachment_url( $id ),
+                'file_size' => ( file_exists( $file ) ) ? (int) filesize( $file ) : 0,
+                'date'      => $row->post_date,
+                'edit_url'  => get_edit_post_link( $id, 'raw' ),
+            ];
+        }
+
+        $total = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$wpdb->posts} p
+             WHERE p.post_type = 'attachment'
+               AND p.post_mime_type LIKE 'image/%%'
+               AND p.ID NOT IN ({$thumb_in})
+               AND (
+                   p.post_parent = 0
+                   OR NOT EXISTS (
+                       SELECT 1 FROM {$wpdb->posts} pp
+                       WHERE pp.ID = p.post_parent
+                         AND pp.post_status NOT IN ('trash','auto-draft')
+                   )
+               )"
+        );
+
+        $total_size = array_sum( array_column( $items, 'file_size' ) );
+
+        return [
+            'items'      => $items,
+            'total'      => $total,
+            'total_size' => $total_size,
+            'has_more'   => ( $offset + $limit ) < $total,
+        ];
+    }
+
+    /**
+     * 본문에서 이미지 파일명·Gutenberg 블록 ID 인덱스 빌드 (5분 캐시)
+     */
+    private function build_content_index() {
+        $cached = get_transient( 'dim_content_index' );
+        if ( $cached !== false ) return $cached;
+
+        global $wpdb;
+        $rows = $wpdb->get_col(
+            "SELECT post_content FROM {$wpdb->posts}
+             WHERE post_status IN ('publish','draft','private','inherit')
+               AND (post_content LIKE '%/uploads/%' OR post_content LIKE '%\"id\":%')"
+        );
+
+        $filenames = [];
+        $ids       = [];
+        foreach ( $rows as $content ) {
+            // URL 기반 (클래식 에디터 / src 속성)
+            preg_match_all( '/\/uploads\/[^"\'>\s\)]+\.(jpe?g|png|gif|webp)/i', $content, $um );
+            foreach ( $um[0] as $path ) $filenames[ basename( $path ) ] = true;
+
+            // Gutenberg 블록 이미지 ID ("id":123)
+            preg_match_all( '/"id"\s*:\s*(\d+)/', $content, $im );
+            foreach ( $im[1] as $bid ) $ids[ (int) $bid ] = true;
+        }
+
+        $result = [ 'filenames' => $filenames, 'ids' => $ids ];
+        set_transient( 'dim_content_index', $result, 5 * MINUTE_IN_SECONDS );
+        return $result;
+    }
+
+    /**
      * 여러 첨부파일 삭제
      */
     public function delete_attachments( array $ids ) {

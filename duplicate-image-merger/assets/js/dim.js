@@ -477,6 +477,70 @@
     }
 
     // ═══════════════════════════════════
+    // ⑤ 미사용 이미지
+    // ═══════════════════════════════════
+    var $progUnused  = null;
+    var unusedOffset = 0;
+    var unusedTotalSize = 0;
+
+    function loadUnused(append) {
+        $progUnused = $('#dim-progress-unused');
+        if (!append) { unusedOffset = 0; unusedTotalSize = 0; $('#dim-unused-list').empty(); }
+        prog($progUnused, 0, 0, '스캔 중');
+        post('scan_unused', { limit: 50, offset: unusedOffset }, function(err, d) {
+            hideProg($progUnused);
+            if (err) return notice(err.message, false);
+
+            $('#dim-unused-total').text(d.total);
+            unusedTotalSize += d.total_size || 0;
+            $('#dim-unused-size').text(fmt(unusedTotalSize));
+            $('#dim-unused-summary').show();
+
+            if (!d.items.length && !unusedOffset) {
+                $('#dim-unused-list').html('<p style="padding:16px">미사용 이미지가 없습니다 ✅</p>');
+                return;
+            }
+
+            var tmpl = $('#dim-unused-item-tmpl').html();
+            d.items.forEach(function(item) {
+                $('#dim-unused-list').append(tmpl
+                    .replace(/\{\{id\}\}/g,       item.id)
+                    .replace(/\{\{url\}\}/g,       item.url || '')
+                    .replace(/\{\{title\}\}/g,     esc(item.title))
+                    .replace(/\{\{type\}\}/g,      (item.type || '').toUpperCase())
+                    .replace(/\{\{size\}\}/g,      fmt(item.file_size))
+                    .replace(/\{\{date\}\}/g,      (item.date || '').slice(0, 10))
+                    .replace(/\{\{edit_url\}\}/g,  item.edit_url || '#')
+                );
+            });
+
+            unusedOffset += d.items.length;
+            $('#dim-unused-select-wrap').toggle(unusedOffset > 0);
+            $('#dim-unused-more-wrap').toggle(!!d.has_more);
+            updateUnusedCount();
+        });
+    }
+
+    function updateUnusedCount() {
+        var n = $('.dim-unused-checkbox:checked').length;
+        $('#dim-unused-selected-count').text(n + '개 선택됨');
+        $('#dim-delete-unused-btn').prop('disabled', n === 0);
+    }
+
+    function deleteUnused() {
+        var ids = $('.dim-unused-checkbox:checked').map(function() { return this.value; }).get();
+        if (!ids.length) return;
+        if (!confirm('선택한 ' + ids.length + '개 이미지를 완전히 삭제합니다. 복구 불가합니다.')) return;
+        if (!$progUnused || !$progUnused.length) $progUnused = $('#dim-progress-unused');
+        prog($progUnused, 0, 0, '삭제 중');
+        post('delete_images', { ids: ids }, function(err, d) {
+            hideProg($progUnused);
+            err ? notice(err.message, false) : notice(d.deleted + '개 삭제 완료.', true);
+            loadUnused(false);
+        });
+    }
+
+    // ═══════════════════════════════════
     // ④ 용량 현황
     // ═══════════════════════════════════
     function loadStats() {
@@ -598,6 +662,15 @@
 
         // 탭 ④
         $('#dim-load-stats-btn').on('click', loadStats);
+
+        // 탭 ⑤
+        $('#dim-scan-unused-btn').on('click', function(){ loadUnused(false); });
+        $('#dim-delete-unused-btn').on('click', deleteUnused);
+        $('#dim-unused-more-btn').on('click', function(){ loadUnused(true); });
+        $('#dim-unused-select-all').on('change', function(){
+            $('.dim-unused-checkbox').prop('checked', this.checked); updateUnusedCount();
+        });
+        $(document).on('change', '.dim-unused-checkbox', updateUnusedCount);
     });
 
 }(jQuery));

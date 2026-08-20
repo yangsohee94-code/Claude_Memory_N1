@@ -8,6 +8,7 @@
         <button class="dim-tab" data-tab="nonwebp">WebP 변환</button>
         <button class="dim-tab" data-tab="nothumb">대표이미지 없는 글</button>
         <button class="dim-tab" data-tab="stats">용량 현황</button>
+        <button class="dim-tab" data-tab="unused">미사용 이미지</button>
     </div>
 
     <!-- ① 중복 이미지 탭 -->
@@ -154,6 +155,39 @@
         </div>
     </div>
 
+    <!-- ⑤ 미사용 이미지 탭 -->
+    <div class="dim-tab-content" id="dim-tab-unused">
+        <div class="dim-panel-desc" style="padding:12px 0 0;">
+            <strong>미사용 이미지</strong> — 어떤 글/페이지에도 삽입되지 않고, 대표이미지로도 지정되지 않은 이미지입니다.<br>
+            <span class="dim-muted">※ Elementor 등 페이지 빌더 전용 이미지는 일부 미탐지될 수 있습니다.</span>
+        </div>
+        <div class="dim-action-bar" style="margin-top:8px;">
+            <button id="dim-scan-unused-btn" class="button button-primary">🔍 미사용 이미지 스캔</button>
+            <span class="dim-spacer"></span>
+            <button id="dim-delete-unused-btn" class="button dim-btn-danger" disabled>🗑 선택 항목 삭제</button>
+        </div>
+
+        <div id="dim-progress-unused" class="dim-progress-wrap" style="display:none;">
+            <div class="dim-progress-inner"><div class="dim-progress-bar"></div></div>
+            <span class="dim-progress-text"></span>
+        </div>
+
+        <div id="dim-unused-summary" style="display:none;" class="dim-summary">
+            <span>미사용 후보 <strong id="dim-unused-total">0</strong>개</span>
+            <span>삭제 시 절약 <strong id="dim-unused-size">0 B</strong></span>
+        </div>
+
+        <div id="dim-unused-select-wrap" style="display:none;" class="dim-select-all-wrap">
+            <label><input type="checkbox" id="dim-unused-select-all"> 전체 선택 / 해제</label>
+            <span id="dim-unused-selected-count" class="dim-muted">0개 선택됨</span>
+        </div>
+
+        <div id="dim-unused-list"></div>
+        <div id="dim-unused-more-wrap" style="display:none;text-align:center;margin:12px 0;">
+            <button id="dim-unused-more-btn" class="button">더 보기</button>
+        </div>
+    </div>
+
     <!-- 전체 알림 -->
     <div id="dim-notice" style="display:none;" class="dim-notice"></div>
 </div>
@@ -197,6 +231,20 @@
         <strong>{{title}}</strong>
         <span class="dim-muted">{{type}} · {{size}} · {{date}}</span>
         <span class="dim-muted">ID: {{id}}</span>
+    </div>
+    <a href="{{edit_url}}" target="_blank" class="button button-small">편집</a>
+</div>
+</script>
+
+<script type="text/html" id="dim-unused-item-tmpl">
+<div class="dim-nw-item">
+    <input type="checkbox" class="dim-unused-checkbox" value="{{id}}">
+    <img src="{{url}}" alt="" loading="lazy">
+    <div class="dim-item-info">
+        <strong>{{title}}</strong>
+        <span class="dim-muted">{{type}} · {{size}} · {{date}}</span>
+        <span class="dim-muted">ID: {{id}}</span>
+        <span class="dim-badge-unused">미사용</span>
     </div>
     <a href="{{edit_url}}" target="_blank" class="button button-small">편집</a>
 </div>
