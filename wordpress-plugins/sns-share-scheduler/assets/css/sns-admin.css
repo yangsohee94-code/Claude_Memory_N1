@@ -1,0 +1,88 @@
+.sns-settings-page h1 {
+    margin-bottom: 6px;
+}
+
+.sns-card {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.sns-card-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    margin: 0;
+    border-bottom: 1px solid #f0f0f1;
+    font-size: 14px;
+}
+
+.sns-card-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    color: #fff;
+    font-weight: 900;
+    font-size: 14px;
+}
+
+.sns-status-badge {
+    margin-left: auto;
+    font-size: 12px;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-weight: normal;
+}
+
+.sns-status-badge.connected {
+    background: #d4edda;
+    color: #155724;
+}
+
+.sns-status-badge.disconnected {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.sns-card details {
+    padding: 0 20px 16px;
+}
+
+.sns-card details summary {
+    padding: 12px 0;
+    cursor: pointer;
+    color: #0073aa;
+    font-size: 13px;
+}
+
+.sns-guide {
+    background: #f0f6fc;
+    border-left: 3px solid #0073aa;
+    padding: 10px 14px;
+    font-size: 13px;
+    margin-bottom: 16px;
+    border-radius: 0 4px 4px 0;
+}
+
+.sns-settings-page .form-table th {
+    font-size: 13px;
+    width: 180px;
+}
+
+/* 공유 현황 페이지 */
+.sns-status {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.sns-status.pending   { background: #fff3cd; color: #856404; }
+.sns-status.sent      { background: #d4edda; color: #155724; }
+.sns-status.failed    { background: #f8d7da; color: #721c24; }
+.sns-status.cancelled { background: #e2e3e5; color: #383d41; }
