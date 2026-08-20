@@ -1,13 +1,27 @@
-/* ===== Duplicate Image Merger ===== */
+/* ===== Duplicate Image Merger v1.2 ===== */
 .dim-wrap { max-width: 1100px; }
+
+/* 탭 */
+.dim-tabs {
+    display: flex; gap: 4px; border-bottom: 2px solid #dcdcde;
+    margin-bottom: 20px; flex-wrap: wrap;
+}
+.dim-tab {
+    padding: 8px 18px; background: #f6f7f7; border: 1px solid #dcdcde;
+    border-bottom: none; border-radius: 4px 4px 0 0; cursor: pointer;
+    font-size: 13px; font-weight: 500; color: #50575e;
+    margin-bottom: -2px; transition: background .15s;
+}
+.dim-tab:hover   { background: #fff; color: #1d2327; }
+.dim-tab.active  { background: #fff; color: #1d2327; border-bottom: 2px solid #fff; }
+
+.dim-tab-content { display: none; }
+.dim-tab-content.active { display: block; }
 
 /* 자동 최적화 패널 */
 .dim-panel {
-    background: #fff;
-    border: 1px solid #dcdcde;
-    border-radius: 6px;
-    padding: 16px 20px;
-    margin-bottom: 16px;
+    background: #fff; border: 1px solid #dcdcde; border-radius: 6px;
+    padding: 16px 20px; margin-bottom: 16px;
 }
 .dim-panel h2 { margin: 0 0 6px; font-size: 15px; }
 .dim-panel-desc { color: #646970; margin: 0 0 12px; font-size: 13px; }
@@ -17,16 +31,16 @@
     font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: normal;
 }
 
-/* 토글 스위치 */
+/* 토글 */
 .dim-toggle { position: relative; display: inline-block; width: 44px; height: 24px; }
 .dim-toggle input { opacity: 0; width: 0; height: 0; }
 .dim-toggle-slider {
     position: absolute; inset: 0; background: #ccc; border-radius: 24px;
-    cursor: pointer; transition: .3s;
+    cursor: pointer; transition: .25s;
 }
 .dim-toggle-slider::before {
     content: ''; position: absolute; width: 18px; height: 18px;
-    left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .3s;
+    left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .25s;
 }
 .dim-toggle input:checked + .dim-toggle-slider { background: #2271b1; }
 .dim-toggle input:checked + .dim-toggle-slider::before { transform: translateX(20px); }
@@ -34,19 +48,19 @@
 /* 액션 바 */
 .dim-action-bar {
     display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
-    padding: 12px 16px;
-    background: #fff; border: 1px solid #dcdcde; border-radius: 4px;
-    margin-bottom: 14px;
+    padding: 12px 16px; background: #fff;
+    border: 1px solid #dcdcde; border-radius: 4px; margin-bottom: 14px;
 }
 .dim-spacer { flex: 1; }
-.dim-btn-webp  { background: #6f42c1 !important; color: #fff !important; border-color: #6f42c1 !important; }
-.dim-btn-thumb { background: #0d6efd !important; color: #fff !important; border-color: #0d6efd !important; }
+.dim-btn-webp   { background: #6f42c1 !important; color: #fff !important; border-color: #6f42c1 !important; }
+.dim-btn-thumb  { background: #0d6efd !important; color: #fff !important; border-color: #0d6efd !important; }
+.dim-btn-danger { background: #d63638 !important; color: #fff !important; border-color: #d63638 !important; }
 
 /* 진행 */
-#dim-progress { margin-bottom: 12px; }
-.dim-progress-inner { height: 10px; background: #e0e0e0; border-radius: 5px; overflow: hidden; margin-bottom: 6px; }
+.dim-progress-wrap { margin-bottom: 12px; }
+.dim-progress-inner { height: 10px; background: #e0e0e0; border-radius: 5px; overflow: hidden; margin-bottom: 5px; }
 .dim-progress-bar   { height: 100%; width: 0; background: linear-gradient(90deg,#2271b1,#4f9de8); transition: width .4s ease; }
-#dim-progress-text  { font-size: 13px; color: #1d2327; font-weight: 500; }
+.dim-progress-text  { font-size: 13px; color: #1d2327; font-weight: 500; }
 
 /* 요약 */
 .dim-summary {
@@ -62,26 +76,21 @@
     background: #fff; border: 1px solid #dcdcde; border-radius: 4px;
 }
 
-/* 그룹 카드 */
+/* 중복 그룹 */
 .dim-group { background: #fff; border: 1px solid #dcdcde; border-radius: 6px; margin-bottom: 16px; }
 .dim-group-header {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 8px 14px; background: #f6f7f7; border-bottom: 1px solid #dcdcde;
-    font-size: 13px;
+    padding: 8px 14px; background: #f6f7f7; border-bottom: 1px solid #dcdcde; font-size: 13px;
 }
-.dim-group-footer {
-    padding: 8px 14px; background: #f6f7f7; border-top: 1px solid #dcdcde; text-align: right;
-}
+.dim-group-footer { padding: 8px 14px; background: #f6f7f7; border-top: 1px solid #dcdcde; text-align: right; }
 .dim-group-items { display: flex; flex-wrap: wrap; }
-
-/* 이미지 아이템 */
 .dim-item {
     display: flex; align-items: flex-start; gap: 10px;
     padding: 12px 14px; width: 50%; box-sizing: border-box;
     border-right: 1px solid #f0f0f0; border-top: 1px solid #f0f0f0;
 }
 .dim-item:nth-child(even) { border-right: none; }
-.dim-item:nth-child(-n+2)  { border-top: none; }
+.dim-item:nth-child(-n+2) { border-top: none; }
 .dim-item.dim-used { background: #f0faf0; }
 .dim-item img { width: 72px; height: 72px; object-fit: cover; border-radius: 4px; border: 1px solid #dcdcde; flex-shrink: 0; }
 .dim-item-info { flex: 1; font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
@@ -92,6 +101,63 @@
     font-size: 11px; padding: 1px 6px; border-radius: 8px; width: fit-content;
 }
 
+/* WebP 목록 */
+.dim-nw-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; background: #fff;
+    border: 1px solid #dcdcde; border-radius: 4px; margin-bottom: 6px;
+}
+.dim-nw-item img { width: 56px; height: 56px; object-fit: cover; border-radius: 3px; border: 1px solid #dcdcde; flex-shrink: 0; }
+
+/* 대표이미지 없는 글 */
+.dim-nt-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; background: #fff;
+    border: 1px solid #dcdcde; border-radius: 4px; margin-bottom: 6px;
+    font-size: 13px;
+}
+.dim-nt-type {
+    background: #f0f6fc; color: #2271b1; border: 1px solid #c5d9ed;
+    font-size: 11px; padding: 2px 7px; border-radius: 10px; white-space: nowrap;
+}
+.dim-nt-item a { flex: 1; }
+
+/* 통계 카드 */
+.dim-stats-grid {
+    display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 24px;
+}
+@media (max-width: 900px) { .dim-stats-grid { grid-template-columns: repeat(2,1fr); } }
+.dim-stat-card {
+    padding: 16px 20px; border-radius: 6px; border: 1px solid #dcdcde; background: #fff;
+}
+.dim-stat-label  { font-size: 12px; color: #646970; margin-bottom: 6px; }
+.dim-stat-value  { font-size: 26px; font-weight: 700; line-height: 1; margin-bottom: 4px; }
+.dim-stat-sub    { font-size: 12px; color: #646970; }
+.dim-stat-total  .dim-stat-value { color: #1d2327; }
+.dim-stat-webp   .dim-stat-value { color: #00a32a; }
+.dim-stat-other  .dim-stat-value { color: #d63638; }
+.dim-stat-save   .dim-stat-value { color: #2271b1; }
+
+/* 차트 */
+.dim-chart-wrap, .dim-usage-bar-wrap { background: #fff; border: 1px solid #dcdcde; border-radius: 6px; padding: 16px 20px; margin-bottom: 16px; }
+.dim-chart-wrap h3, .dim-usage-bar-wrap h3 { margin: 0 0 14px; font-size: 14px; }
+.dim-chart-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; }
+.dim-chart-label { width: 50px; font-weight: 600; text-align: right; color: #50575e; }
+.dim-chart-bar-wrap { flex: 1; background: #f0f0f0; border-radius: 4px; height: 18px; overflow: hidden; }
+.dim-chart-bar { height: 100%; border-radius: 4px; min-width: 4px; transition: width .5s ease; }
+.dim-bar-jpeg { background: #f0ad4e; }
+.dim-bar-png  { background: #5bc0de; }
+.dim-bar-gif  { background: #d9534f; }
+.dim-bar-webp { background: #5cb85c; }
+.dim-chart-val { width: 120px; text-align: right; color: #646970; font-size: 12px; }
+
+/* 사용률 바 */
+.dim-usage-bar { height: 24px; background: #d63638; border-radius: 6px; overflow: hidden; margin-bottom: 8px; }
+.dim-usage-fill { height: 100%; background: #00a32a; border-radius: 6px 0 0 6px; transition: width .6s ease; }
+.dim-usage-labels { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; }
+.dim-usage-webp  { color: #00a32a; }
+.dim-usage-other { color: #d63638; }
+
 /* 알림 */
 .dim-notice {
     margin-top: 14px; padding: 10px 16px; border-radius: 4px;
@@ -99,7 +165,6 @@
 }
 .dim-notice.dim-ok  { border-color: #00a32a; background: #f0faf0; }
 .dim-notice.dim-err { border-color: #d63638; background: #fcf0f1; }
-
 .dim-muted { color: #646970; font-size: 12px; }
 
 @media (max-width: 782px) {

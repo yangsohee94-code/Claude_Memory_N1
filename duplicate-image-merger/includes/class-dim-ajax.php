@@ -4,7 +4,11 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class DIM_Ajax {
 
     public function init() {
-        $actions = [ 'scan', 'merge', 'auto_merge', 'convert_webp', 'fix_thumbnails', 'schedule', 'get_counts' ];
+        $actions = [
+            'scan', 'merge', 'auto_merge', 'convert_webp', 'fix_thumbnails',
+            'schedule', 'get_counts',
+            'get_stats', 'get_no_thumb_posts', 'get_nonwebp', 'delete_images',
+        ];
         foreach ( $actions as $a ) {
             add_action( "wp_ajax_dim_{$a}", [ $this, "handle_{$a}" ] );
         }
@@ -91,6 +95,34 @@ class DIM_Ajax {
             $target = strtotime( '+1 day', $target );
         }
         return $target;
+    }
+
+    public function handle_get_stats() {
+        $this->auth();
+        wp_send_json_success( ( new DIM_Stats() )->get_storage_stats() );
+    }
+
+    public function handle_get_no_thumb_posts() {
+        $this->auth();
+        wp_send_json_success( ( new DIM_Stats() )->get_posts_without_thumbnail(
+            absint( $_POST['limit']  ?? 50 ),
+            absint( $_POST['offset'] ?? 0 )
+        ) );
+    }
+
+    public function handle_get_nonwebp() {
+        $this->auth();
+        wp_send_json_success( ( new DIM_Stats() )->get_nonwebp_images(
+            absint( $_POST['limit']  ?? 50 ),
+            absint( $_POST['offset'] ?? 0 )
+        ) );
+    }
+
+    public function handle_delete_images() {
+        $this->auth();
+        $ids = array_map( 'absint', (array)( $_POST['ids'] ?? [] ) );
+        if ( empty( $ids ) ) wp_send_json_error( [ 'message' => '삭제할 이미지가 없습니다.' ] );
+        wp_send_json_success( ( new DIM_Stats() )->delete_attachments( $ids ) );
     }
 
     public function handle_get_counts() {

@@ -2,9 +2,11 @@
 (function ($) {
     'use strict';
 
-    var groups      = [];
-    var totalImages = 0;   // 전체 이미지 수
-    var totalNonWebp = 0;  // WebP 변환 대상 수
+    var groups       = [];
+    var totalImages  = 0;
+    var totalNonWebp = 0;
+    var nwOffset     = 0;   // 비WebP 목록 페이지
+    var ntOffset     = 0;   // 대표이미지없는글 페이지
 
     // ── 유틸 ──
     function fmt(bytes) {
@@ -12,56 +14,63 @@
         var k = 1024, u = ['B','KB','MB','GB'], i = Math.floor(Math.log(bytes)/Math.log(k));
         return (bytes/Math.pow(k,i)).toFixed(1)+' '+u[i];
     }
-    function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-    function progress(done, total, label) {
-        var pct  = total > 0 ? Math.min(99, Math.round(done / total * 100)) : 5;
-        var text = label + ' · ' + done.toLocaleString() + ' / ' + total.toLocaleString() + '개 (' + pct + '%)';
-        $('#dim-progress').show();
-        $('#dim-progress-bar').css('width', pct + '%');
-        $('#dim-progress-text').text(text);
+    function prog($wrap, done, total, label) {
+        var pct  = total > 0 ? Math.min(99, Math.round(done/total*100)) : 50;
+        var text = total > 0
+            ? label+' · '+done.toLocaleString()+' / '+total.toLocaleString()+'개 ('+pct+'%)'
+            : label+'...';
+        $wrap.show().find('.dim-progress-bar').css('width', pct+'%');
+        $wrap.find('.dim-progress-text').text(text);
     }
-    function progressMsg(msg) {   // 수량 없이 메시지만
-        $('#dim-progress').show();
-        $('#dim-progress-bar').css('width', '50%');
-        $('#dim-progress-text').text(msg);
-    }
-    function hideProgress(){ setTimeout(function(){ $('#dim-progress').hide(); }, 700); }
+    function hideProg($wrap){ setTimeout(function(){ $wrap.hide(); }, 700); }
 
     function notice(msg, ok) {
         $('#dim-notice').removeClass('dim-ok dim-err')
             .addClass(ok ? 'dim-ok' : 'dim-err').html(msg).show();
+        $('html,body').animate({ scrollTop: $('#dim-notice').offset().top - 40 }, 200);
     }
 
     function post(action, data, cb) {
-        $.post(DIM.ajax_url, $.extend({ action: 'dim_'+action, nonce: DIM.nonce }, data))
+        $.post(DIM.ajax_url, $.extend({ action:'dim_'+action, nonce:DIM.nonce }, data))
             .done(function(r){ cb(r.success ? null : r.data, r.data); })
-            .fail(function(){ cb({ message: '서버 오류' }); });
+            .fail(function(){ cb({ message:'서버 오류' }); });
     }
 
-    // ── 스케줄 초기화 ──
+    // ── 탭 ──
+    $(document).on('click', '.dim-tab', function(){
+        $('.dim-tab').removeClass('active');
+        $('.dim-tab-content').removeClass('active');
+        $(this).addClass('active');
+        $('#dim-tab-'+$(this).data('tab')).addClass('active');
+    });
+
+    // ── 자동 예약 ──
     function initSchedule() {
         var $tog = $('#dim-schedule-toggle').prop('checked', DIM.cron_on);
-        $('#dim-schedule-label').text(DIM.cron_on ? '자동 최적화 예약 중 (매일)' : '자동 최적화 꺼짐');
+        $('#dim-schedule-label').text(DIM.cron_on ? '자동 최적화 예약 중 (매일 새벽 3시)' : '자동 최적화 꺼짐');
         if (DIM.last_run) $('#dim-last-run').text('마지막 실행: '+DIM.last_run);
-
         $tog.on('change', function(){
-            post('schedule', { enable: this.checked }, function(err, d){
-                if (!err) notice(d.message, true);
-            });
-            $('#dim-schedule-label').text(this.checked ? '자동 최적화 예약 중 (매일)' : '자동 최적화 꺼짐');
+            post('schedule', { enable: this.checked }, function(err, d){ if (!err) notice(d.message, true); });
+            $('#dim-schedule-label').text(this.checked ? '자동 최적화 예약 중 (매일 새벽 3시)' : '자동 최적화 꺼짐');
         });
     }
 
-    // ── 스캔 ──
+    // ═══════════════════════════════════
+    // ① 중복 이미지
+    // ═══════════════════════════════════
+    var $progDup = null;
+
     function startScan() {
+        $progDup = $('#dim-progress-dup');
         groups = [];
         $('#dim-results').empty();
         $('#dim-select-all-wrap, #dim-summary').hide();
         $('#dim-notice').hide();
         $('#dim-auto-merge-btn, #dim-merge-selected-btn').prop('disabled', true);
 
-        progressMsg('이미지 수 확인 중...');
+        prog($progDup, 0, 0, '이미지 수 확인 중');
         post('get_counts', {}, function(err, data){
             totalImages  = err ? 0 : (data.total_images  || 0);
             totalNonWebp = err ? 0 : (data.total_nonwebp || 0);
@@ -70,24 +79,22 @@
     }
 
     function scanBatch(offset, scanned) {
-        progress(offset, totalImages || offset + 200, '스캔 중');
-        post('scan', { offset: offset, batch: 200 }, function(err, data){
+        prog($progDup, offset, totalImages || offset+200, '스캔 중');
+        post('scan', { offset:offset, batch:200 }, function(err, data){
             if (err) return notice('스캔 실패: '+(err.message||''), false);
             data.duplicates.forEach(function(g){ groups.push(g); });
             var done = scanned + data.total_scanned;
-            if (data.has_more) { scanBatch(offset + 200, done); return; }
-            renderAll(done);
+            if (data.has_more) { scanBatch(offset+200, done); return; }
+            renderDuplicates(done);
         });
     }
 
-    function renderAll(scanned) {
-        hideProgress();
-        var dupCount = groups.reduce(function(s,g){ return s+g.count; },0);
-        var saved    = groups.reduce(function(s,g){
+    function renderDuplicates(scanned) {
+        hideProg($progDup);
+        var saved = groups.reduce(function(s,g){
             var sizes = g.items.map(function(i){ return i.file_size||0; });
-            return s + sizes.reduce(function(a,b){ return a+b; },0) - Math.max.apply(null,sizes);
+            return s + sizes.reduce(function(a,b){return a+b;},0) - Math.max.apply(null,sizes);
         },0);
-
         $('#dim-total-scanned').text(scanned);
         $('#dim-group-count').text(groups.length);
         $('#dim-saved-size').text(fmt(saved));
@@ -99,15 +106,14 @@
         }
 
         var $res = $('#dim-results').empty();
-        var gtmpl = $('#dim-group-tmpl').html();
-        var itmpl = $('#dim-item-tmpl').html();
+        var gt = $('#dim-group-tmpl').html(), it = $('#dim-item-tmpl').html();
 
         groups.forEach(function(g, idx){
             var items = g.items.map(function(item){
-                return itmpl
+                return it
                     .replace(/\{\{id\}\}/g,        item.id)
                     .replace(/\{\{url\}\}/g,        item.url||'')
-                    .replace(/\{\{title\}\}/g,      esc(item.title||''))
+                    .replace(/\{\{title\}\}/g,      esc(item.title))
                     .replace(/\{\{date\}\}/g,        item.date||'')
                     .replace(/\{\{size\}\}/g,        fmt(item.file_size))
                     .replace(/\{\{group_idx\}\}/g,   idx)
@@ -115,31 +121,29 @@
                     .replace(/\{\{used_badge\}\}/g,  item.is_used ? '<span class="dim-badge-used">사용 중</span>' : '');
             }).join('');
 
-            $res.append( gtmpl
+            $res.append(gt
                 .replace(/\{\{idx\}\}/g,        idx)
                 .replace(/\{\{count\}\}/g,       g.count)
                 .replace(/\{\{hash_short\}\}/g,  (g.hash||'').slice(0,10)+'…')
                 .replace(/\{\{items\}\}/g,       items)
             );
         });
-
         $('#dim-select-all-wrap').show();
         $('#dim-auto-merge-btn, #dim-merge-selected-btn').prop('disabled', false);
-        updateCount();
+        updateDupCount();
     }
 
-    function updateCount() {
+    function updateDupCount() {
         var n = $('.dim-item-checkbox:checked').length;
         $('#dim-selected-count').text(n+'개 선택됨');
         $('#dim-merge-selected-btn').prop('disabled', n===0);
     }
 
-    // ── 수동 병합 ──
     function mergeSelected() {
         var tasks = {};
         $('.dim-item-checkbox:checked').each(function(){
             var g = $(this).data('group-idx');
-            (tasks[g] = tasks[g]||[]).push($(this).val());
+            (tasks[g]=tasks[g]||[]).push($(this).val());
         });
         if (!Object.keys(tasks).length) return alert('선택된 항목이 없습니다.');
         if (!confirm('선택 이미지를 병합합니다. 삭제된 이미지는 복구 불가합니다.')) return;
@@ -149,128 +153,255 @@
             var keep = $('input[name="dim-keep-'+g+'"]:checked').val();
             if (!keep) { alert((parseInt(g)+1)+'번 그룹: 원본 유지 이미지를 선택하세요.'); return false; }
             var del = ids.filter(function(i){ return i!==keep; });
-            if (del.length) calls.push({ keep_id: keep, delete_ids: del });
+            if (del.length) calls.push({ keep_id:keep, delete_ids:del });
         });
 
         var total = calls.length, done = 0;
-        progress(done, total, '병합 중');
+        prog($progDup, done, total, '병합 중');
         var chain = $.when();
         calls.forEach(function(c){
             chain = chain.then(function(){
-                return $.post(DIM.ajax_url, $.extend({ action:'dim_merge', nonce:DIM.nonce }, c))
-                    .done(function(r){
-                        if(r.success) merged += r.data.merged;
-                        done++;
-                        progress(done, total, '병합 중');
-                    });
+                return $.post(DIM.ajax_url, $.extend({action:'dim_merge',nonce:DIM.nonce},c))
+                    .done(function(r){ if(r.success) merged+=r.data.merged; prog($progDup, ++done, total, '병합 중'); });
             });
         });
-        chain.always(function(){
-            hideProgress();
-            notice(merged+'개 이미지가 병합되었습니다.', true);
-            startScan();
-        });
+        chain.always(function(){ hideProg($progDup); notice(merged+'개 병합 완료.', true); startScan(); });
     }
 
-    // ── 자동 병합 ──
     function autoMerge() {
-        if (!groups.length || !confirm('사용 중인 이미지를 기준으로 전체 자동 병합합니다.')) return;
-        progress(10, '자동 병합 중...');
-        post('auto_merge', { groups: groups }, function(err, d){
-            hideProgress();
-            err ? notice('오류: '+err.message, false)
-                : notice(d.merged+'개 병합 완료.'+(d.errors&&d.errors.length ? ' 오류: '+d.errors.join(', '):''), true);
+        if (!groups.length || !confirm('사용 중인 이미지 기준으로 전체 자동 병합합니다.')) return;
+        prog($progDup, 0, 0, '자동 병합 중');
+        post('auto_merge', { groups:groups }, function(err, d){
+            hideProg($progDup);
+            err ? notice(err.message, false)
+                : notice(d.merged+'개 병합 완료.', true);
             startScan();
         });
     }
 
-    // ── WebP 변환 ──
-    function convertWebP() {
-        if (!DIM.can_webp) return notice('이 서버는 WebP 변환을 지원하지 않습니다 (GD 또는 Imagick 필요).', false);
-        if (!confirm('전체 이미지를 WebP로 변환합니다. 원본 파일은 삭제됩니다.')) return;
-        $('#dim-webp-btn').prop('disabled', true);
-        webpBatch(0, 0);
-    }
-
-    function webpBatch(offset, converted) {
-        var total = totalNonWebp || (offset + 30);
-        progress(converted, total, 'WebP 변환 중');
-        post('convert_webp', { offset: offset, batch: 30 }, function(err, d){
-            if (err) { $('#dim-webp-btn').prop('disabled', false); return notice(err.message, false); }
-            converted += d.converted;
-            if (d.has_more) { webpBatch(offset + 30, converted); return; }
-            hideProgress();
-            $('#dim-webp-btn').prop('disabled', false);
-            notice('WebP 변환 완료: ' + converted + '개 변환, ' + d.skipped + '개 건너뜀.', true);
-        });
-    }
-
-    // ── 대표이미지 정합성 ──
     function fixThumbnails() {
         if (!confirm('손상된 대표이미지를 자동 수정합니다.')) return;
-        progressMsg('대표이미지 정합성 확인 중... (잠시만 기다려주세요)');
+        prog($progDup, 0, 0, '대표이미지 확인 중');
         post('fix_thumbnails', {}, function(err, d){
-            hideProgress();
+            hideProg($progDup);
             err ? notice(err.message, false)
-                : notice('대표이미지 수정 완료 — 총 ' + d.total_checked + '개 확인 · 자동 연결: ' + d.fixed + '개 · 삭제: ' + d.cleared + '개', true);
+                : notice('대표이미지 수정 완료 — 총 '+d.total_checked+'개 확인 · 연결: '+d.fixed+'개 · 삭제: '+d.cleared+'개', true);
         });
     }
 
-    // ── 전체 최적화 즉시 실행 ──
     function runAll() {
-        if (!confirm('중복 병합 → WebP 변환 → 대표이미지 정합성 수정을 지금 실행합니다.\n시간이 걸릴 수 있습니다.')) return;
-        progress(10, '전체 최적화 실행 중...');
-        // 순서대로 실행
-        post('auto_merge', { groups: groups }, function(err, d){
-            progress(40, 'WebP 변환 중...');
+        if (!confirm('중복 병합 → WebP 변환 → 대표이미지 수정을 지금 실행합니다.')) return;
+        prog($progDup, 0, 0, '전체 최적화 중');
+        post('auto_merge', { groups:groups }, function(){
             if (DIM.can_webp) {
-                webpRunSync(0, function(){
-                    progress(90, '대표이미지 수정 중...');
-                    post('fix_thumbnails', {}, function(){
-                        hideProgress();
-                        notice('전체 최적화 완료!', true);
-                        startScan();
-                    });
+                webpAllSync(0, function(){
+                    post('fix_thumbnails', {}, function(){ hideProg($progDup); notice('전체 최적화 완료!', true); startScan(); });
                 });
             } else {
-                post('fix_thumbnails', {}, function(){
-                    hideProgress();
-                    notice('최적화 완료 (WebP 미지원 서버)!', true);
-                    startScan();
-                });
+                post('fix_thumbnails', {}, function(){ hideProg($progDup); notice('최적화 완료!', true); startScan(); });
             }
         });
     }
 
-    function webpRunSync(offset, done) {
-        post('convert_webp', { offset: offset, batch: 30 }, function(err, d){
+    function webpAllSync(offset, done) {
+        post('convert_webp', { offset:offset, batch:30 }, function(err, d){
             if (err || !d.has_more) { done(); return; }
-            webpRunSync(offset+30, done);
+            webpAllSync(offset+30, done);
         });
     }
 
-    // ── 이벤트 ──
+    // ═══════════════════════════════════
+    // ② WebP 변환 탭
+    // ═══════════════════════════════════
+    var $progWebp = null;
+
+    function loadNonWebp(append) {
+        $progWebp = $('#dim-progress-webp');
+        if (!append) { nwOffset = 0; $('#dim-nonwebp-list').empty(); }
+        prog($progWebp, 0, 0, '불러오는 중');
+        post('get_nonwebp', { limit:50, offset:nwOffset }, function(err, d){
+            hideProg($progWebp);
+            if (err) return notice(err.message, false);
+
+            var tmpl = $('#dim-nonwebp-item-tmpl').html();
+            d.items.forEach(function(item){
+                $('#dim-nonwebp-list').append(tmpl
+                    .replace(/\{\{id\}\}/g,       item.id)
+                    .replace(/\{\{url\}\}/g,       item.url||'')
+                    .replace(/\{\{title\}\}/g,     esc(item.title))
+                    .replace(/\{\{type\}\}/g,      item.type.toUpperCase())
+                    .replace(/\{\{size\}\}/g,      fmt(item.file_size))
+                    .replace(/\{\{date\}\}/g,      (item.date||'').slice(0,10))
+                    .replace(/\{\{edit_url\}\}/g,  item.edit_url||'#')
+                );
+            });
+
+            nwOffset += d.items.length;
+            $('#dim-nonwebp-select-wrap').toggle(nwOffset > 0);
+            $('#dim-nonwebp-more-wrap').toggle(d.has_more);
+            updateNwCount();
+        });
+    }
+
+    function updateNwCount() {
+        var n = $('.dim-nw-checkbox:checked').length;
+        $('#dim-nonwebp-selected-count').text(n+'개 선택됨');
+        $('#dim-convert-selected-btn, #dim-delete-nonwebp-btn').prop('disabled', n===0);
+    }
+
+    function convertSelected() {
+        var ids = $('.dim-nw-checkbox:checked').map(function(){ return this.value; }).get();
+        if (!ids.length) return;
+        if (!confirm(ids.length+'개 이미지를 WebP로 변환합니다.')) return;
+
+        var done = 0;
+        prog($progWebp, done, ids.length, 'WebP 변환 중');
+        var chain = $.when();
+        ids.forEach(function(id){
+            chain = chain.then(function(){
+                return $.post(DIM.ajax_url, { action:'dim_convert_webp', nonce:DIM.nonce, single_id:id })
+                    .done(function(){ prog($progWebp, ++done, ids.length, 'WebP 변환 중'); });
+            });
+        });
+        chain.always(function(){ hideProg($progWebp); notice(done+'개 변환 완료.', true); loadNonWebp(false); });
+    }
+
+    function convertAll() {
+        if (!DIM.can_webp) return notice('이 서버는 WebP 변환을 지원하지 않습니다 (GD 또는 Imagick 필요).', false);
+        if (!confirm('전체 이미지를 WebP로 변환합니다. 원본 파일은 삭제됩니다.')) return;
+        var converted = 0;
+        webpBatch(0, converted);
+    }
+
+    function webpBatch(offset, converted) {
+        var total = totalNonWebp || (offset+30);
+        prog($progWebp, converted, total, 'WebP 변환 중');
+        post('convert_webp', { offset:offset, batch:30 }, function(err, d){
+            if (err) return notice(err.message, false);
+            converted += d.converted;
+            if (d.has_more) { webpBatch(offset+30, converted); return; }
+            hideProg($progWebp);
+            notice('WebP 변환 완료: '+converted+'개 변환, '+d.skipped+'개 건너뜀.', true);
+            loadNonWebp(false);
+        });
+    }
+
+    function deleteSelected() {
+        var ids = $('.dim-nw-checkbox:checked').map(function(){ return this.value; }).get();
+        if (!ids.length) return;
+        if (!confirm('선택한 '+ids.length+'개 이미지를 완전히 삭제합니다. 복구 불가합니다.')) return;
+        prog($progWebp, 0, 0, '삭제 중');
+        post('delete_images', { ids:ids }, function(err, d){
+            hideProg($progWebp);
+            err ? notice(err.message, false)
+                : notice(d.deleted+'개 삭제 완료.', true);
+            loadNonWebp(false);
+        });
+    }
+
+    // ═══════════════════════════════════
+    // ③ 대표이미지 없는 글
+    // ═══════════════════════════════════
+    var $progNt = null;
+
+    function loadNoThumb(append) {
+        $progNt = $('#dim-progress-nothumb');
+        if (!append) { ntOffset = 0; $('#dim-nothumb-list').empty(); }
+        prog($progNt, 0, 0, '불러오는 중');
+        post('get_no_thumb_posts', { limit:50, offset:ntOffset }, function(err, d){
+            hideProg($progNt);
+            if (err) return notice(err.message, false);
+
+            $('#dim-nothumb-count').text(d.total);
+            $('#dim-nothumb-summary').show();
+
+            var tmpl = $('#dim-nothumb-item-tmpl').html();
+            var adminUrl = DIM.admin_url;
+            d.items.forEach(function(item){
+                var editUrl = adminUrl+'post.php?post='+item.ID+'&action=edit';
+                $('#dim-nothumb-list').append(tmpl
+                    .replace(/\{\{title\}\}/g,    esc(item.post_title || '(제목 없음)'))
+                    .replace(/\{\{type\}\}/g,      item.post_type === 'page' ? '페이지' : '글')
+                    .replace(/\{\{date\}\}/g,      (item.post_date||'').slice(0,10))
+                    .replace(/\{\{edit_url\}\}/g,  editUrl)
+                );
+            });
+
+            ntOffset += d.items.length;
+            $('#dim-nothumb-more-wrap').toggle(d.has_more);
+
+            if (!d.total) {
+                $('#dim-nothumb-list').html('<p style="padding:16px">대표이미지 없는 글이 없습니다 ✅</p>');
+            }
+        });
+    }
+
+    // ═══════════════════════════════════
+    // ④ 용량 현황
+    // ═══════════════════════════════════
+    function loadStats() {
+        $('#dim-progress-stats').show();
+        $('#dim-stats-result').hide();
+        post('get_stats', {}, function(err, d){
+            $('#dim-progress-stats').hide();
+            if (err) return notice(err.message, false);
+
+            var total = d.total_size, other = d.other_size, webp = d.webp_size;
+            var estSave = Math.round(other * 0.35);
+            var webpPct = total > 0 ? Math.round(webp/total*100) : 0;
+
+            $('#stat-total-count').text(d.total_count.toLocaleString()+'개');
+            $('#stat-total-size').text(fmt(total));
+            $('#stat-webp-count').text(d.webp_count.toLocaleString()+'개');
+            $('#stat-webp-size').text(fmt(webp));
+            $('#stat-other-count').text(d.other_count.toLocaleString()+'개');
+            $('#stat-other-size').text(fmt(other));
+            $('#stat-save-pct').text('~'+fmt(estSave));
+
+            $('#dim-webp-pct-bar').css('width', webpPct+'%');
+            $('#dim-webp-pct-label').text(webpPct+'%');
+            $('#dim-other-pct-label').text((100-webpPct)+'%');
+
+            var $chart = $('#dim-type-chart').empty();
+            var types = d.by_type || {};
+            Object.keys(types).forEach(function(type){
+                var info = types[type];
+                var pct  = total > 0 ? Math.round(info.size/total*100) : 0;
+                $chart.append(
+                    '<div class="dim-chart-row">'+
+                    '<span class="dim-chart-label">'+type.toUpperCase()+'</span>'+
+                    '<div class="dim-chart-bar-wrap">'+
+                    '<div class="dim-chart-bar dim-bar-'+type+'" style="width:'+pct+'%"></div>'+
+                    '</div>'+
+                    '<span class="dim-chart-val">'+info.count+'개 · '+fmt(info.size)+'</span>'+
+                    '</div>'
+                );
+            });
+
+            $('#dim-stats-result').show();
+        });
+    }
+
+    // ═══════════════════════════════════
+    // 이벤트 바인딩
+    // ═══════════════════════════════════
     $(function(){
         initSchedule();
 
+        // 탭 ①
         $('#dim-scan-btn').on('click', startScan);
         $('#dim-auto-merge-btn').on('click', autoMerge);
         $('#dim-merge-selected-btn').on('click', mergeSelected);
-        $('#dim-webp-btn').on('click', convertWebP);
         $('#dim-thumb-btn').on('click', fixThumbnails);
         $('#dim-run-now-btn').on('click', runAll);
-
         $('#dim-select-all').on('change', function(){
-            $('.dim-item-checkbox').prop('checked', this.checked);
-            updateCount();
+            $('.dim-item-checkbox').prop('checked', this.checked); updateDupCount();
         });
         $(document).on('change', '.dim-group-select-all', function(){
             var g = $(this).data('group-idx');
-            $('.dim-item-checkbox[data-group-idx="'+g+'"]').prop('checked', this.checked);
-            updateCount();
+            $('.dim-item-checkbox[data-group-idx="'+g+'"]').prop('checked', this.checked); updateDupCount();
         });
-        $(document).on('change', '.dim-item-checkbox', updateCount);
-
+        $(document).on('change', '.dim-item-checkbox', updateDupCount);
         $(document).on('click', '.dim-merge-group-btn', function(){
             var g    = $(this).data('group-idx');
             var keep = $('input[name="dim-keep-'+g+'"]:checked').val();
@@ -279,13 +410,31 @@
             var del = [];
             $('.dim-item-checkbox[data-group-idx="'+g+'"]').each(function(){ if(this.value!==keep) del.push(this.value); });
             if (!del.length) return;
-            progress(10, '병합 중...');
-            post('merge', { keep_id: keep, delete_ids: del }, function(err, d){
-                hideProgress();
-                err ? notice(err.message, false) : notice(d.merged+'개 병합 완료.', true);
+            prog($progDup||$('#dim-progress-dup'), 0, 0, '병합 중');
+            post('merge', { keep_id:keep, delete_ids:del }, function(err, d){
+                hideProg($progDup||$('#dim-progress-dup'));
+                err ? notice(err.message,false) : notice(d.merged+'개 병합 완료.',true);
                 startScan();
             });
         });
+
+        // 탭 ②
+        $('#dim-load-nonwebp-btn').on('click', function(){ loadNonWebp(false); });
+        $('#dim-convert-selected-btn').on('click', convertSelected);
+        $('#dim-convert-all-btn').on('click', convertAll);
+        $('#dim-delete-nonwebp-btn').on('click', deleteSelected);
+        $('#dim-nonwebp-more-btn').on('click', function(){ loadNonWebp(true); });
+        $('#dim-nonwebp-select-all').on('change', function(){
+            $('.dim-nw-checkbox').prop('checked', this.checked); updateNwCount();
+        });
+        $(document).on('change', '.dim-nw-checkbox', updateNwCount);
+
+        // 탭 ③
+        $('#dim-load-nothumb-btn').on('click', function(){ loadNoThumb(false); });
+        $('#dim-nothumb-more-btn').on('click', function(){ loadNoThumb(true); });
+
+        // 탭 ④
+        $('#dim-load-stats-btn').on('click', loadStats);
     });
 
 }(jQuery));

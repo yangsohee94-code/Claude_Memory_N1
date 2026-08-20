@@ -15,13 +15,24 @@ define( 'DIM_VERSION',    '1.1.0' );
 define( 'DIM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DIM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
-foreach ( [ 'scanner', 'merger', 'converter', 'thumbnail', 'admin', 'ajax' ] as $c ) {
+foreach ( [ 'scanner', 'merger', 'converter', 'thumbnail', 'stats', 'admin', 'ajax' ] as $c ) {
     require_once DIM_PLUGIN_DIR . "includes/class-dim-{$c}.php";
 }
 
 add_action( 'plugins_loaded', function () {
     ( new DIM_Admin() )->init();
     ( new DIM_Ajax()  )->init();
+} );
+
+// 업로드 즉시 WebP 자동 변환
+add_action( 'add_attachment', function ( $attachment_id ) {
+    $mime = get_post_mime_type( $attachment_id );
+    if ( in_array( $mime, [ 'image/jpeg', 'image/png', 'image/gif' ], true ) ) {
+        $converter = new DIM_Converter();
+        if ( $converter->can_convert() ) {
+            $converter->convert_to_webp( $attachment_id );
+        }
+    }
 } );
 
 register_deactivation_hook( __FILE__, function () {

@@ -20,11 +20,12 @@ class DIM_Admin {
         wp_enqueue_style(  'dim-style',  DIM_PLUGIN_URL . 'assets/css/dim.css', [], DIM_VERSION );
         wp_enqueue_script( 'dim-script', DIM_PLUGIN_URL . 'assets/js/dim.js', [ 'jquery' ], DIM_VERSION, true );
         wp_localize_script( 'dim-script', 'DIM', [
-            'ajax_url'   => admin_url( 'admin-ajax.php' ),
-            'nonce'      => wp_create_nonce( 'dim_nonce' ),
-            'can_webp'   => ( new DIM_Converter() )->can_convert(),
-            'cron_on'    => (bool) wp_next_scheduled( 'dim_optimize_cron' ),
-            'last_run'   => get_option( 'dim_last_cron_run', '' ),
+            'ajax_url'  => admin_url( 'admin-ajax.php' ),
+            'admin_url' => admin_url(),
+            'nonce'     => wp_create_nonce( 'dim_nonce' ),
+            'can_webp'  => ( new DIM_Converter() )->can_convert(),
+            'cron_on'   => (bool) wp_next_scheduled( 'dim_optimize_cron' ),
+            'last_run'  => get_option( 'dim_last_cron_run', '' ),
         ] );
     }
 
