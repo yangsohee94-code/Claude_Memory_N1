@@ -102,7 +102,8 @@
         });
     }
 
-    var ENRICH_BATCH = 50;
+    var ENRICH_BATCH = 20;
+    var ENRICH_TIMEOUT = 30000; // 30초 타임아웃
 
     function enrichGroups(scanned) {
         if (!rawGroups.length) {
@@ -110,20 +111,51 @@
             return;
         }
         var enriched = [];
+        var failCount = 0;
 
         function enrichBatch(offset) {
             prog(getProgDup(), offset, rawGroups.length, '사용 여부 확인 중');
             var slice = rawGroups.slice(offset, offset + ENRICH_BATCH);
-            post('enrich', { groups: slice }, function(err, data){
-                if (err) return notice('상세조회 실패: '+(err.message||''), false);
-                enriched = enriched.concat(data.groups || []);
-                var next = offset + ENRICH_BATCH;
-                if (next < rawGroups.length) {
-                    enrichBatch(next);
-                } else {
-                    renderDuplicates(scanned, enriched);
-                }
-            });
+            var next  = offset + ENRICH_BATCH;
+
+            var timer = setTimeout(function () {
+                // 타임아웃: 이 배치를 건너뛰고 is_used=false로 기본값 처리
+                failCount++;
+                var fallback = slice.map(function(g){
+                    return { hash: g.hash, count: g.ids.length, items: g.ids.map(function(id){
+                        return { id: id, file_size: 0, url: '', is_used: false, title: 'ID '+id, date: '' };
+                    })};
+                });
+                enriched = enriched.concat(fallback);
+                if (next < rawGroups.length) { enrichBatch(next); } else { finish(); }
+            }, ENRICH_TIMEOUT);
+
+            $.post(DIM.ajax_url, $.extend({ action:'dim_enrich', nonce:DIM.nonce }, { groups: slice }))
+                .always(function(r, status){
+                    clearTimeout(timer);
+                    var data = (status === 'success' && r && r.success) ? r.data : null;
+                    if (data && data.groups) {
+                        enriched = enriched.concat(data.groups);
+                    } else {
+                        // 실패: 기본값으로 채우고 계속 진행
+                        failCount++;
+                        slice.forEach(function(g){
+                            enriched.push({ hash: g.hash, count: g.ids.length, items: g.ids.map(function(id){
+                                return { id: id, file_size: 0, url: '', is_used: false, title: 'ID '+id, date: '' };
+                            })});
+                        });
+                    }
+                    if (next < rawGroups.length) { enrichBatch(next); } else { finish(); }
+                });
+        }
+
+        function finish() {
+            if (failCount > 0) {
+                $('#dim-progress-dup .dim-progress-text').text(
+                    '⚠ '+failCount+'배치 조회 실패 — 나머지 결과 표시 중'
+                );
+            }
+            renderDuplicates(scanned, enriched);
         }
 
         enrichBatch(0);

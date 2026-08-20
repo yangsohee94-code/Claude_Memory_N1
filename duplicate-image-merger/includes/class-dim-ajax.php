@@ -26,10 +26,25 @@ class DIM_Ajax {
     // 스캔 완료 후 중복 그룹 상세정보(is_used 등) 일괄 조회
     public function handle_enrich() {
         $this->auth();
-        @set_time_limit( 60 );
+        @set_time_limit( 25 );   // JS 타임아웃(30s)보다 짧게 설정
+        @ini_set( 'memory_limit', '256M' );
+
+        $groups = isset( $_POST['groups'] ) && is_array( $_POST['groups'] )
+                  ? $_POST['groups'] : [];
+
+        if ( empty( $groups ) ) {
+            wp_send_json_success( [ 'groups' => [] ] );
+        }
+
         $scanner = new DIM_Scanner();
-        $groups  = $_POST['groups'] ?? [];
-        wp_send_json_success( [ 'groups' => $scanner->enrich_groups( $groups ) ] );
+        try {
+            $result = $scanner->enrich_groups( $groups );
+            wp_send_json_success( [ 'groups' => $result ] );
+        } catch ( \Throwable $e ) {
+            wp_send_json_error( [ 'message' => 'enrich 오류: ' . $e->getMessage() ] );
+        } catch ( \Exception $e ) {
+            wp_send_json_error( [ 'message' => 'enrich 오류: ' . $e->getMessage() ] );
+        }
     }
 
     public function handle_merge() {
