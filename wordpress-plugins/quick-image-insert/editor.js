@@ -16,13 +16,11 @@
         var frame = wp.media( {
             title  : '미디어 / 파일 찾기 (여러 개 선택 가능)',
             button : { text: '이미지 삽입' },
-            multiple: true,
-            frame  : 'post',
-            state  : 'insert',
+            multiple: 'add',
             library: { type: 'image' },
         } );
 
-        frame.on( 'insert', function () {
+        frame.on( 'select', function () {
             var selection = frame.state().get( 'selection' );
 
             // H2 개수 = 삽입 한도
