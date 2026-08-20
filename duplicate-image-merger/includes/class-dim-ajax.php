@@ -44,7 +44,6 @@ class DIM_Ajax {
         $groups = $_POST['groups'] ?? [];
         if ( empty( $groups ) ) wp_send_json_error( [ 'message' => '그룹 없음' ] );
 
-        $scanner = new DIM_Scanner();
         $merger  = new DIM_Merger();
         $merged  = 0;
         $errors  = [];
@@ -52,7 +51,8 @@ class DIM_Ajax {
         foreach ( $groups as $group ) {
             foreach ( $group['items'] as &$item ) {
                 $item['id']      = absint( $item['id'] );
-                $item['is_used'] = $scanner->is_image_in_use( $item['id'] );
+                // is_used는 스캔 시 이미 계산됨 — 재조회 불필요 (LIKE 쿼리 방지)
+                $item['is_used'] = (bool) ( $item['is_used'] ?? false );
             }
             $r       = $merger->auto_merge_group( $group );
             $merged += $r['merged'];

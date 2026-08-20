@@ -35,9 +35,12 @@
     }
 
     function post(action, data, cb) {
-        $.post(DIM.ajax_url, $.extend({ action:'dim_'+action, nonce:DIM.nonce }, data))
-            .done(function(r){ cb(r.success ? null : r.data, r.data); })
-            .fail(function(){ cb({ message:'서버 오류' }); });
+        $.ajax({
+            url: DIM.ajax_url, type: 'POST', timeout: 90000,
+            data: $.extend({ action:'dim_'+action, nonce:DIM.nonce }, data)
+        })
+        .done(function(r){ cb(r.success ? null : r.data, r.data); })
+        .fail(function(xhr, status){ cb({ message: status === 'timeout' ? '요청 시간 초과 (90초)' : '서버 오류' }); });
     }
 
     // ── 탭 ──
@@ -174,7 +177,10 @@
         var chain = $.when();
         calls.forEach(function(c){
             chain = chain.then(function(){
-                return $.post(DIM.ajax_url, $.extend({action:'dim_merge',nonce:DIM.nonce},c))
+                return $.ajax({
+                    url: DIM.ajax_url, type: 'POST', timeout: 90000,
+                    data: $.extend({ action:'dim_merge', nonce:DIM.nonce }, c)
+                })
                     .done(function(r){ if(r.success) merged += r.data.merged || 0; else mergeErrors++; })
                     .fail(function(){ mergeErrors++; })
                     .always(function(){ prog(getProgDup(), ++done, total, '병합 중'); });
@@ -205,7 +211,10 @@
         var chain = $.when();
         batches.forEach(function(batch) {
             chain = chain.then(function() {
-                return $.post(DIM.ajax_url, { action: 'dim_auto_merge', nonce: DIM.nonce, groups: batch })
+                return $.ajax({
+                    url: DIM.ajax_url, type: 'POST', timeout: 90000,
+                    data: { action: 'dim_auto_merge', nonce: DIM.nonce, groups: batch }
+                })
                     .done(function(r) {
                         if (r.success) {
                             totalMerged += r.data.merged || 0;
@@ -250,7 +259,10 @@
         var chain = $.when();
         batches.forEach(function(batch) {
             chain = chain.then(function() {
-                return $.post(DIM.ajax_url, { action:'dim_auto_merge', nonce:DIM.nonce, groups:batch })
+                return $.ajax({
+                    url: DIM.ajax_url, type: 'POST', timeout: 90000,
+                    data: { action:'dim_auto_merge', nonce:DIM.nonce, groups:batch }
+                })
                     .always(function(){ prog(getProgDup(), ++done, total, '자동 병합 중'); });
             });
         });
@@ -327,7 +339,10 @@
         var chain = $.when();
         ids.forEach(function(id) {
             chain = chain.then(function() {
-                return $.post(DIM.ajax_url, { action:'dim_convert_webp', nonce:DIM.nonce, single_id: id })
+                return $.ajax({
+                    url: DIM.ajax_url, type: 'POST', timeout: 90000,
+                    data: { action:'dim_convert_webp', nonce:DIM.nonce, single_id: id }
+                })
                     .done(function(r) {
                         if (r.success) {
                             totals.converted     += r.data.converted     || 0;
