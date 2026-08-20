@@ -653,13 +653,45 @@
     var brokenOffset    = 0;
     var brokenScanned   = 0;
     var brokenFound     = 0;
+    var brokenItems     = [];
+    var brokenSortDesc  = false;
+
+    function renderBrokenList() {
+        var items = brokenItems.slice();
+        if (brokenSortDesc) {
+            items.sort(function(a, b) { return b.broken_ids.length - a.broken_ids.length; });
+        }
+        var $list    = $('#dim-brokenimg-list').empty();
+        var tmpl     = $('#dim-brokenimg-item-tmpl').html();
+        var adminUrl = DIM.admin_url;
+        items.forEach(function(item, i) {
+            var editUrl    = item.edit_url || (adminUrl + 'post.php?post=' + item.id + '&action=edit');
+            var brokenCount = item.broken_ids.length;
+            var brokenHtml  = item.broken_ids.map(function(bid) {
+                return '<span class="dim-broken-id-badge">이미지 ID ' + bid + '</span>';
+            }).join(' ');
+            $list.append(tmpl
+                .replace(/\{\{num\}\}/g,            i + 1)
+                .replace(/\{\{title\}\}/g,           esc(item.title || '(제목 없음)'))
+                .replace(/\{\{type\}\}/g,            item.type === 'page' ? '페이지' : '글')
+                .replace(/\{\{date\}\}/g,            (item.date || '').slice(0, 10))
+                .replace(/\{\{edit_url\}\}/g,         editUrl)
+                .replace(/\{\{broken_count\}\}/g,    brokenCount)
+                .replace(/\{\{broken_ids_html\}\}/g,  brokenHtml)
+            );
+        });
+        if (!items.length) {
+            $list.html('<p style="padding:16px">이미지 오류 글이 없습니다 ✅</p>');
+        }
+    }
 
     function loadBrokenImgPosts(append) {
         $progBroken = $('#dim-progress-brokenimg');
         if (!append) {
-            brokenOffset = 0; brokenScanned = 0; brokenFound = 0;
+            brokenOffset = 0; brokenScanned = 0; brokenFound = 0; brokenItems = [];
             $('#dim-brokenimg-list').empty();
             $('#dim-brokenimg-summary').hide();
+            $('#dim-brokenimg-sort-btn').hide();
         }
         prog($progBroken, brokenOffset, 0, '스캔 중');
         post('get_broken_img_posts', { limit: 50, offset: brokenOffset }, function(err, d) {
@@ -669,47 +701,25 @@
             var realItems  = (d.items || []).filter(function(item) {
                 return item.broken_ids && item.broken_ids.length > 0;
             });
-            var prevFound  = brokenFound;
-            brokenFound   += realItems.length;
+            realItems.forEach(function(item) { brokenItems.push(item); });
+            brokenFound = brokenItems.length;
             $('#dim-brokenimg-scanned').text(brokenScanned);
             $('#dim-brokenimg-count').text(brokenFound);
             $('#dim-brokenimg-summary').show();
-
-            var tmpl     = $('#dim-brokenimg-item-tmpl').html();
-            var adminUrl = DIM.admin_url;
-            realItems.forEach(function(item, i) {
-                var editUrl = item.edit_url || (adminUrl + 'post.php?post=' + item.id + '&action=edit');
-                var brokenCount = (item.broken_ids && item.broken_ids.length) ? item.broken_ids.length : 0;
-                var brokenHtml  = brokenCount
-                    ? item.broken_ids.map(function(bid) {
-                        return '<span class="dim-broken-id-badge">이미지 ID ' + bid + '</span>';
-                      }).join(' ')
-                    : '';
-                $('#dim-brokenimg-list').append(tmpl
-                    .replace(/\{\{num\}\}/g,            prevFound + i + 1)
-                    .replace(/\{\{title\}\}/g,           esc(item.title || '(제목 없음)'))
-                    .replace(/\{\{type\}\}/g,            item.type === 'page' ? '페이지' : '글')
-                    .replace(/\{\{date\}\}/g,            (item.date || '').slice(0, 10))
-                    .replace(/\{\{edit_url\}\}/g,         editUrl)
-                    .replace(/\{\{broken_count\}\}/g,    brokenCount)
-                    .replace(/\{\{broken_ids_html\}\}/g,  brokenHtml)
-                );
-            });
 
             brokenOffset += 50;
 
             if (d.has_more) {
                 prog($progBroken, brokenScanned, 0, '스캔 중');
-                loadBrokenImgPosts(true);  // 자동으로 다음 배치 계속
+                loadBrokenImgPosts(true);
             } else {
                 $('#dim-brokenimg-more-wrap').hide();
+                renderBrokenList();
                 var msg = brokenFound
                     ? brokenScanned + '개 스캔 완료 — 오류 이미지 있는 글 ' + brokenFound + '개'
                     : brokenScanned + '개 스캔 완료 — 이미지 오류 글 없음 ✅';
                 progDone($progBroken, msg, true);
-                if (!brokenFound) {
-                    $('#dim-brokenimg-list').html('<p style="padding:16px">이미지 오류 글이 없습니다 ✅</p>');
-                }
+                if (brokenFound > 1) $('#dim-brokenimg-sort-btn').show();
             }
         });
     }
@@ -908,6 +918,11 @@
         // 탭 ⑥ 이미지 오류 글
         $('#dim-scan-brokenimg-btn').on('click', function(){ loadBrokenImgPosts(false); });
         $('#dim-brokenimg-more-btn').on('click', function(){ loadBrokenImgPosts(true); });
+        $('#dim-brokenimg-sort-btn').on('click', function(){
+            brokenSortDesc = !brokenSortDesc;
+            $(this).text(brokenSortDesc ? '기본 순 ↑' : '오류 많은 순 ↓');
+            renderBrokenList();
+        });
 
         // 탭 ⑦ H2 아래 이미지 없는 글
         $('#dim-scan-h2noimg-btn').on('click', function(){ loadH2NoImgPosts(false); });

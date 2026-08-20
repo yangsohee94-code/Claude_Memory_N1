@@ -200,6 +200,7 @@
         </div>
         <div class="dim-action-bar" style="margin-top:8px;">
             <button id="dim-scan-brokenimg-btn" class="button button-primary">🔍 이미지 오류 글 스캔</button>
+            <button id="dim-brokenimg-sort-btn" class="button" style="display:none;">오류 많은 순 ↓</button>
         </div>
 
         <div id="dim-progress-brokenimg" class="dim-progress-wrap" style="display:none;">
