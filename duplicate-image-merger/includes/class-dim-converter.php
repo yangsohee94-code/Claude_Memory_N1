@@ -57,7 +57,8 @@ class DIM_Converter {
 
         $old_url  = wp_get_attachment_url( $id );
         $new_url  = str_replace( basename( $file ), basename( $webp_file ), $old_url );
-        $rel_path = str_replace( ABSPATH, '', $webp_file );
+        $upload   = wp_upload_dir();
+        $rel_path = ltrim( str_replace( trailingslashit( $upload['basedir'] ), '', $webp_file ), '/' );
 
         // WordPress 메타 업데이트
         update_attached_file( $id, $webp_file );

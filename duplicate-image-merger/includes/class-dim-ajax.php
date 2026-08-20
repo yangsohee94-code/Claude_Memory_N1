@@ -23,28 +23,10 @@ class DIM_Ajax {
         ) );
     }
 
-    // 스캔 완료 후 중복 그룹 상세정보(is_used 등) 일괄 조회
+    // scan_duplicates에 통합됨 — 하위 호환용 stub
     public function handle_enrich() {
         $this->auth();
-        @set_time_limit( 25 );   // JS 타임아웃(30s)보다 짧게 설정
-        @ini_set( 'memory_limit', '256M' );
-
-        $groups = isset( $_POST['groups'] ) && is_array( $_POST['groups'] )
-                  ? $_POST['groups'] : [];
-
-        if ( empty( $groups ) ) {
-            wp_send_json_success( [ 'groups' => [] ] );
-        }
-
-        $scanner = new DIM_Scanner();
-        try {
-            $result = $scanner->enrich_groups( $groups );
-            wp_send_json_success( [ 'groups' => $result ] );
-        } catch ( \Throwable $e ) {
-            wp_send_json_error( [ 'message' => 'enrich 오류: ' . $e->getMessage() ] );
-        } catch ( \Exception $e ) {
-            wp_send_json_error( [ 'message' => 'enrich 오류: ' . $e->getMessage() ] );
-        }
+        wp_send_json_success( [ 'groups' => [] ] );
     }
 
     public function handle_merge() {
@@ -57,6 +39,8 @@ class DIM_Ajax {
 
     public function handle_auto_merge() {
         $this->auth();
+        @set_time_limit( 120 );
+        @ini_set( 'memory_limit', '256M' );
         $groups = $_POST['groups'] ?? [];
         if ( empty( $groups ) ) wp_send_json_error( [ 'message' => '그룹 없음' ] );
 
@@ -102,6 +86,8 @@ class DIM_Ajax {
         }
 
         // 배치 변환 (전체 변환 버튼, 50개씩)
+        @set_time_limit( 120 );
+        @ini_set( 'memory_limit', '256M' );
         wp_send_json_success( $converter->convert_all(
             absint( $_POST['batch']  ?? 50 ),
             absint( $_POST['offset'] ?? 0 )

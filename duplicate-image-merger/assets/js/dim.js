@@ -160,7 +160,7 @@
         if (!Object.keys(tasks).length) return alert('선택된 항목이 없습니다.');
         if (!confirm('선택 이미지를 병합합니다. 삭제된 이미지는 복구 불가합니다.')) return;
 
-        var calls = [], merged = 0;
+        var calls = [], merged = 0, mergeErrors = 0;
         $.each(tasks, function(g, ids){
             var keep = $('input[name="dim-keep-'+g+'"]:checked').val();
             if (!keep) { alert((parseInt(g)+1)+'번 그룹: 원본 유지 이미지를 선택하세요.'); return false; }
@@ -174,10 +174,18 @@
         calls.forEach(function(c){
             chain = chain.then(function(){
                 return $.post(DIM.ajax_url, $.extend({action:'dim_merge',nonce:DIM.nonce},c))
-                    .done(function(r){ if(r.success) merged+=r.data.merged; prog(getProgDup(), ++done, total, '병합 중'); });
+                    .done(function(r){ if(r.success) merged += r.data.merged || 0; else mergeErrors++; })
+                    .fail(function(){ mergeErrors++; })
+                    .always(function(){ prog(getProgDup(), ++done, total, '병합 중'); });
             });
         });
-        chain.always(function(){ hideProg(getProgDup()); notice(merged+'개 병합 완료.', true); startScan(); });
+        chain.always(function(){
+            hideProg(getProgDup());
+            var msg = merged+'개 병합 완료';
+            if (mergeErrors) msg += ' · 실패 '+mergeErrors+'개';
+            notice(msg, mergeErrors === 0);
+            startScan();
+        });
     }
 
     function autoMerge() {
@@ -230,10 +238,25 @@
 
     function runAll() {
         if (!confirm('중복 병합 → WebP 변환 → 대표이미지 수정을 지금 실행합니다.')) return;
-        prog(getProgDup(), 0, 0, '전체 최적화 중');
-        post('auto_merge', { groups:groups }, function(){
+
+        var BATCH = 50;
+        var batches = [];
+        for (var i = 0; i < groups.length; i += BATCH) batches.push(groups.slice(i, i + BATCH));
+
+        var done = 0, total = batches.length || 1;
+        prog(getProgDup(), done, total, '자동 병합 중');
+
+        var chain = $.when();
+        batches.forEach(function(batch) {
+            chain = chain.then(function() {
+                return $.post(DIM.ajax_url, { action:'dim_auto_merge', nonce:DIM.nonce, groups:batch })
+                    .always(function(){ prog(getProgDup(), ++done, total, '자동 병합 중'); });
+            });
+        });
+        chain.always(function() {
             if (DIM.can_webp) {
-                webpAllSync(0, function(){
+                prog(getProgDup(), 0, 0, 'WebP 변환 중');
+                webpAllSync(function() {
                     post('fix_thumbnails', {}, function(){ hideProg(getProgDup()); notice('전체 최적화 완료!', true); startScan(); });
                 });
             } else {
@@ -242,10 +265,13 @@
         });
     }
 
-    function webpAllSync(offset, done) {
-        post('convert_webp', { offset:offset, batch:30 }, function(err, d){
-            if (err || !d.has_more) { done(); return; }
-            webpAllSync(offset+30, done);
+    // offset=0 고정: 변환 후 mime_type이 webp로 바뀌므로 다음 쿼리에서 자동 제외됨
+    function webpAllSync(done) {
+        post('convert_webp', { offset: 0, batch: 50 }, function(err, d) {
+            if (err || !d) { done(); return; }
+            var batchDone = (d.converted || 0) + (d.skipped || 0) + (d.errors || []).length;
+            if (d.has_more && batchDone > 0) { webpAllSync(done); return; }
+            done();
         });
     }
 
@@ -262,6 +288,7 @@
             hideProg($progWebp);
             if (err) return notice(err.message, false);
 
+            if (d.total) totalNonWebp = d.total;  // webpBatch 진행률에 사용
             var tmpl = $('#dim-nonwebp-item-tmpl').html();
             d.items.forEach(function(item){
                 $('#dim-nonwebp-list').append(tmpl
@@ -327,20 +354,30 @@
     function convertAll() {
         if (!DIM.can_webp) return notice('이 서버는 WebP 변환을 지원하지 않습니다 (GD 또는 Imagick 필요).', false);
         if (!confirm('전체 이미지를 WebP로 변환합니다. 50개씩 순차 처리되며 원본 파일은 삭제됩니다.')) return;
+        $progWebp = $progWebp || $('#dim-progress-webp');
         var totals = { converted: 0, skipped: 0, errors: 0, unlink_failed: 0 };
-        webpBatch(0, totals);
+        webpBatch(totals);
     }
 
-    function webpBatch(offset, totals) {
-        var total = totalNonWebp || (offset + 50);
-        prog($progWebp, offset, total, 'WebP 변환 중 (성공 ' + totals.converted + '개)');
-        post('convert_webp', { offset: offset, batch: 50 }, function(err, d) {
-            if (err) return notice('변환 오류: ' + (err.message || ''), false);
+    // offset=0 고정: 변환 후 mime_type이 webp로 바뀌어 다음 쿼리에서 자동 제외됨
+    // batchDone===0이면 진행 불가(전체 오류)로 판단해 중단 — 무한루프 방지
+    function webpBatch(totals) {
+        var processed = totals.converted + totals.skipped + totals.errors;
+        var total = totalNonWebp ? (totalNonWebp - totals.skipped) : (processed + 50);
+        prog($progWebp, totals.converted, total,
+            'WebP 변환 중 · 성공 ' + totals.converted + ' / 건너뜀 ' + totals.skipped);
+        post('convert_webp', { offset: 0, batch: 50 }, function(err, d) {
+            if (err) {
+                hideProg($progWebp);
+                return notice('변환 오류: ' + (err.message || ''), false);
+            }
+            var batchDone = (d.converted || 0) + (d.skipped || 0) + (d.errors || []).length;
             totals.converted     += d.converted     || 0;
             totals.skipped       += d.skipped       || 0;
             totals.errors        += (d.errors       || []).length;
             totals.unlink_failed += d.unlink_failed || 0;
-            if (d.has_more) { webpBatch(offset + 50, totals); return; }
+            // 이번 배치에서 뭔가 처리됐고 더 남아있으면 계속
+            if (d.has_more && batchDone > 0) { webpBatch(totals); return; }
             hideProg($progWebp);
             var msg = 'WebP 변환 완료: 성공 ' + totals.converted + '개 · 건너뜀 ' + totals.skipped + '개';
             if (totals.unlink_failed) msg += ' · 원본삭제 실패 ' + totals.unlink_failed + '개';
