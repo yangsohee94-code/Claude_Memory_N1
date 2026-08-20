@@ -245,6 +245,177 @@ class DIM_Stats {
     }
 
     /**
+     * 본문에 오류 이미지(파일 없음/첨부 삭제됨)가 있는 발행된 글 목록
+     * Gutenberg 블록 "id":N 과 클래식 에디터 /uploads/ URL 둘 다 감지
+     */
+    public function get_posts_with_broken_images( $limit = 50, $offset = 0 ) {
+        global $wpdb;
+
+        $posts = $wpdb->get_results( $wpdb->prepare(
+            "SELECT ID, post_title, post_type, post_date, post_content
+             FROM {$wpdb->posts}
+             WHERE post_type IN ('post','page')
+               AND post_status = 'publish'
+               AND (post_content LIKE '%%\"id\":%%' OR post_content LIKE '%%/uploads/%%')
+             ORDER BY post_date DESC
+             LIMIT %d OFFSET %d",
+            $limit, $offset
+        ) );
+
+        if ( empty( $posts ) ) {
+            return [ 'items' => [], 'total_scanned' => 0, 'has_more' => false ];
+        }
+
+        // 배치 내 모든 참조 이미지 ID 수집
+        $att_to_posts = []; // att_id => [post_id, ...]
+        foreach ( $posts as $post ) {
+            preg_match_all( '/"id"\s*:\s*(\d+)/', $post->post_content, $m );
+            foreach ( $m[1] as $att_id ) {
+                $att_to_posts[ (int) $att_id ][] = $post->ID;
+            }
+        }
+
+        $broken_post_ids = [];
+
+        if ( ! empty( $att_to_posts ) ) {
+            $all_ids      = array_keys( $att_to_posts );
+            $placeholders = implode( ',', array_fill( 0, count( $all_ids ), '%d' ) );
+
+            // DB에 존재하는 이미지 attachment ID 목록
+            $valid_ids = $wpdb->get_col( $wpdb->prepare(
+                "SELECT ID FROM {$wpdb->posts}
+                 WHERE ID IN ({$placeholders})
+                   AND post_type = 'attachment'
+                   AND post_mime_type LIKE 'image/%%'",
+                ...$all_ids
+            ) );
+            $valid_ids = array_map( 'intval', $valid_ids );
+
+            // DB에 없는 ID → 즉시 오류
+            foreach ( array_diff( $all_ids, $valid_ids ) as $missing_id ) {
+                foreach ( $att_to_posts[ $missing_id ] ?? [] as $post_id ) {
+                    $broken_post_ids[ $post_id ] = true;
+                }
+            }
+
+            // DB에 있지만 파일이 없는 경우
+            foreach ( $valid_ids as $vid ) {
+                $file = get_attached_file( $vid );
+                if ( ! $file || ! file_exists( $file ) ) {
+                    foreach ( $att_to_posts[ $vid ] ?? [] as $post_id ) {
+                        $broken_post_ids[ $post_id ] = true;
+                    }
+                }
+            }
+        }
+
+        $items = [];
+        foreach ( $posts as $post ) {
+            if ( isset( $broken_post_ids[ $post->ID ] ) ) {
+                $items[] = [
+                    'id'       => (int) $post->ID,
+                    'title'    => $post->post_title,
+                    'type'     => $post->post_type,
+                    'date'     => $post->post_date,
+                    'edit_url' => get_edit_post_link( $post->ID, 'raw' ),
+                ];
+            }
+        }
+
+        $total_with_images = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$wpdb->posts}
+             WHERE post_type IN ('post','page')
+               AND post_status = 'publish'
+               AND (post_content LIKE '%\"id\":%' OR post_content LIKE '%/uploads/%')"
+        );
+
+        return [
+            'items'         => $items,
+            'total_scanned' => count( $posts ),
+            'has_more'      => ( $offset + $limit ) < $total_with_images,
+        ];
+    }
+
+    /**
+     * H2 바로 다음 블록이 이미지가 아닌 글 목록
+     * Gutenberg: wp:heading level:2 뒤에 wp:image/gallery/cover/media-text 없으면 플래그
+     * 클래식 에디터: <h2> 뒤 300자 안에 <img>/<figure> 없으면 플래그
+     */
+    public function get_posts_h2_without_image( $limit = 50, $offset = 0 ) {
+        global $wpdb;
+
+        $posts = $wpdb->get_results( $wpdb->prepare(
+            "SELECT ID, post_title, post_type, post_date, post_content
+             FROM {$wpdb->posts}
+             WHERE post_type IN ('post','page')
+               AND post_status = 'publish'
+               AND post_content LIKE '%%<h2%%'
+             ORDER BY post_date DESC
+             LIMIT %d OFFSET %d",
+            $limit, $offset
+        ) );
+
+        $items = [];
+        foreach ( $posts as $post ) {
+            if ( $this->has_h2_without_image( $post->post_content ) ) {
+                $items[] = [
+                    'id'       => (int) $post->ID,
+                    'title'    => $post->post_title,
+                    'type'     => $post->post_type,
+                    'date'     => $post->post_date,
+                    'edit_url' => get_edit_post_link( $post->ID, 'raw' ),
+                ];
+            }
+        }
+
+        $total = (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$wpdb->posts}
+             WHERE post_type IN ('post','page')
+               AND post_status = 'publish'
+               AND post_content LIKE '%<h2%'"
+        );
+
+        return [
+            'items'         => $items,
+            'total_scanned' => count( $posts ),
+            'has_more'      => ( $offset + $limit ) < $total,
+        ];
+    }
+
+    /**
+     * post_content 안에 "H2 다음 이미지 없음" 패턴이 있는지 확인
+     */
+    private function has_h2_without_image( $content ) {
+        // Gutenberg 블록 방식
+        if ( strpos( $content, '<!-- wp:heading' ) !== false ) {
+            // 블록 단위로 분리
+            $blocks = preg_split( '/(?=<!-- wp:)/', $content );
+            $n      = count( $blocks );
+            for ( $i = 0; $i < $n; $i++ ) {
+                if ( ! preg_match( '/<!-- wp:heading[^-]*"level"\s*:\s*2/', $blocks[ $i ] ) ) continue;
+                // 다음 비어있지 않은 블록 찾기
+                $next = '';
+                for ( $j = $i + 1; $j < $n; $j++ ) {
+                    $next = trim( $blocks[ $j ] );
+                    if ( $next !== '' ) break;
+                }
+                // 이미지 계열 블록이 아니면 오류
+                if ( ! preg_match( '/^<!-- wp:(image|gallery|media-text|cover)\b/', $next ) ) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // 클래식 에디터: <h2> 뒤 300자 안에 <img> 또는 <figure> 없으면 플래그
+        preg_match_all( '/<h2[^>]*>[\s\S]*?<\/h2>([\s\S]{0,300})/i', $content, $m );
+        foreach ( $m[1] as $after ) {
+            if ( ! preg_match( '/<(img|figure)\b/i', $after ) ) return true;
+        }
+        return false;
+    }
+
+    /**
      * 여러 첨부파일 삭제
      */
     public function delete_attachments( array $ids ) {

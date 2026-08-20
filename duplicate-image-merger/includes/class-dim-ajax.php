@@ -8,6 +8,7 @@ class DIM_Ajax {
             'scan', 'enrich', 'merge', 'auto_merge', 'convert_webp', 'fix_thumbnails',
             'schedule', 'get_counts',
             'get_stats', 'get_no_thumb_posts', 'get_nonwebp', 'delete_images', 'scan_unused',
+            'get_broken_img_posts', 'get_h2_no_img_posts',
         ];
         foreach ( $actions as $a ) {
             add_action( "wp_ajax_dim_{$a}", [ $this, "handle_{$a}" ] );
@@ -151,6 +152,26 @@ class DIM_Ajax {
         @set_time_limit( 120 );
         @ini_set( 'memory_limit', '256M' );
         wp_send_json_success( ( new DIM_Stats() )->get_unused_images(
+            absint( $_POST['limit']  ?? 50 ),
+            absint( $_POST['offset'] ?? 0 )
+        ) );
+    }
+
+    public function handle_get_broken_img_posts() {
+        $this->auth();
+        @set_time_limit( 120 );
+        @ini_set( 'memory_limit', '256M' );
+        wp_send_json_success( ( new DIM_Stats() )->get_posts_with_broken_images(
+            absint( $_POST['limit']  ?? 50 ),
+            absint( $_POST['offset'] ?? 0 )
+        ) );
+    }
+
+    public function handle_get_h2_no_img_posts() {
+        $this->auth();
+        @set_time_limit( 120 );
+        @ini_set( 'memory_limit', '256M' );
+        wp_send_json_success( ( new DIM_Stats() )->get_posts_h2_without_image(
             absint( $_POST['limit']  ?? 50 ),
             absint( $_POST['offset'] ?? 0 )
         ) );

@@ -9,6 +9,8 @@
         <button class="dim-tab" data-tab="nothumb">대표이미지 없는 글</button>
         <button class="dim-tab" data-tab="stats">용량 현황</button>
         <button class="dim-tab" data-tab="unused">미사용 이미지</button>
+        <button class="dim-tab" data-tab="brokenimg">이미지 오류 글</button>
+        <button class="dim-tab" data-tab="h2noimg">H2 이미지 누락</button>
     </div>
 
     <!-- ① 중복 이미지 탭 -->
@@ -63,6 +65,7 @@
             <button id="dim-convert-all-btn" class="button dim-btn-webp">⚡ 전체 WebP 변환</button>
             <span class="dim-spacer"></span>
             <button id="dim-delete-nonwebp-btn" class="button dim-btn-danger" disabled>🗑 선택 항목 삭제</button>
+            <button id="dim-delete-all-nonwebp-btn" class="button dim-btn-danger">🗑 전체 삭제</button>
         </div>
 
         <div id="dim-progress-webp" class="dim-progress-wrap" style="display:none;">
@@ -165,6 +168,7 @@
             <button id="dim-scan-unused-btn" class="button button-primary">🔍 미사용 이미지 스캔</button>
             <span class="dim-spacer"></span>
             <button id="dim-delete-unused-btn" class="button dim-btn-danger" disabled>🗑 선택 항목 삭제</button>
+            <button id="dim-delete-all-unused-btn" class="button dim-btn-danger">🗑 전체 삭제</button>
         </div>
 
         <div id="dim-progress-unused" class="dim-progress-wrap" style="display:none;">
@@ -185,6 +189,58 @@
         <div id="dim-unused-list"></div>
         <div id="dim-unused-more-wrap" style="display:none;text-align:center;margin:12px 0;">
             <button id="dim-unused-more-btn" class="button">더 보기</button>
+        </div>
+    </div>
+
+    <!-- ⑥ 이미지 오류 글 탭 -->
+    <div class="dim-tab-content" id="dim-tab-brokenimg">
+        <div class="dim-panel-desc" style="padding:12px 0 0;">
+            <strong>이미지 오류 글</strong> — 본문에 삽입된 이미지가 실제로 존재하지 않는 글입니다 (파일 삭제·미디어 라이브러리에서 제거된 경우).<br>
+            <span class="dim-muted">※ Gutenberg 블록 이미지 기준으로 스캔합니다. 각 글을 클릭해 직접 교체하세요.</span>
+        </div>
+        <div class="dim-action-bar" style="margin-top:8px;">
+            <button id="dim-scan-brokenimg-btn" class="button button-primary">🔍 이미지 오류 글 스캔</button>
+        </div>
+
+        <div id="dim-progress-brokenimg" class="dim-progress-wrap" style="display:none;">
+            <div class="dim-progress-inner"><div class="dim-progress-bar"></div></div>
+            <span class="dim-progress-text"></span>
+        </div>
+
+        <div id="dim-brokenimg-summary" style="display:none;" class="dim-summary">
+            <span>스캔 <strong id="dim-brokenimg-scanned">0</strong>개</span>
+            <span>오류 이미지 있는 글 <strong id="dim-brokenimg-count">0</strong>개</span>
+        </div>
+
+        <div id="dim-brokenimg-list"></div>
+        <div id="dim-brokenimg-more-wrap" style="display:none;text-align:center;margin:12px 0;">
+            <button id="dim-brokenimg-more-btn" class="button">더 보기</button>
+        </div>
+    </div>
+
+    <!-- ⑦ H2 아래 이미지 없는 글 탭 -->
+    <div class="dim-tab-content" id="dim-tab-h2noimg">
+        <div class="dim-panel-desc" style="padding:12px 0 0;">
+            <strong>H2 이미지 누락</strong> — H2 제목 바로 다음에 이미지가 없는 글입니다.<br>
+            <span class="dim-muted">정상: H2 → 이미지 → H2 → 이미지 &nbsp;/&nbsp; 비정상: H2 → H2 또는 H2 → 텍스트</span>
+        </div>
+        <div class="dim-action-bar" style="margin-top:8px;">
+            <button id="dim-scan-h2noimg-btn" class="button button-primary">🔍 H2 이미지 누락 글 스캔</button>
+        </div>
+
+        <div id="dim-progress-h2noimg" class="dim-progress-wrap" style="display:none;">
+            <div class="dim-progress-inner"><div class="dim-progress-bar"></div></div>
+            <span class="dim-progress-text"></span>
+        </div>
+
+        <div id="dim-h2noimg-summary" style="display:none;" class="dim-summary">
+            <span>스캔 <strong id="dim-h2noimg-scanned">0</strong>개</span>
+            <span>H2 이미지 누락 글 <strong id="dim-h2noimg-count">0</strong>개</span>
+        </div>
+
+        <div id="dim-h2noimg-list"></div>
+        <div id="dim-h2noimg-more-wrap" style="display:none;text-align:center;margin:12px 0;">
+            <button id="dim-h2noimg-more-btn" class="button">더 보기</button>
         </div>
     </div>
 

@@ -410,7 +410,7 @@
     }
 
     function convertAll() {
-        if (!DIM.can_webp) return notice('이 서버는 WebP 변환을 지원하지 않습니다 (GD 또는 Imagick 필요).', false);
+        if (!DIM.can_webp) return notice('이 서버는 WebP 변환을 지원하지 않습니다. GD/Imagick 미설치 또는 업로드 디렉토리 쓰기 권한이 없을 수 있습니다.', false);
         $progWebp = $progWebp || $('#dim-progress-webp');
         var totals = { converted: 0, skipped: 0, errors: 0, unlink_failed: 0 };
         webpBatch(totals);
@@ -428,21 +428,59 @@
                 hideProg($progWebp);
                 return notice('변환 오류: ' + (err.message || ''), false);
             }
-            var batchDone = (d.converted || 0) + (d.skipped || 0) + (d.errors || []).length;
-            totals.converted     += d.converted     || 0;
-            totals.skipped       += d.skipped       || 0;
-            totals.errors        += (d.errors       || []).length;
+            var batchConverted = d.converted || 0;
+            var batchSkipped   = d.skipped   || 0;
+            var batchErrors    = (d.errors   || []).length;
+            totals.converted     += batchConverted;
+            totals.skipped       += batchSkipped;
+            totals.errors        += batchErrors;
             totals.unlink_failed += d.unlink_failed || 0;
-            // 이번 배치에서 뭔가 처리됐고 더 남아있으면 계속
-            if (d.has_more && batchDone > 0) { webpBatch(totals); return; }
-            var ok  = totals.errors === 0;
-            var msg = 'WebP 변환 완료: 성공 ' + totals.converted + '개 · 건너뜀 ' + totals.skipped + '개';
-            if (totals.unlink_failed) msg += ' · 원본삭제 실패 ' + totals.unlink_failed + '개';
-            if (totals.errors) msg += ' · 오류 ' + totals.errors + '개';
+            // 실제로 변환·건너뜀이 있을 때만 다음 배치 진행
+            // 오류만 있으면 같은 이미지를 계속 재시도하는 무한루프 방지
+            var madeProgress = (batchConverted + batchSkipped) > 0;
+            if (d.has_more && madeProgress) { webpBatch(totals); return; }
+            var ok  = totals.errors === 0 && totals.converted > 0;
+            var msg;
+            if (totals.converted === 0 && totals.errors > 0) {
+                msg = 'WebP 변환 실패 — 서버가 WebP 변환을 지원하지 않거나 권한이 없습니다 (오류 ' + totals.errors + '개)';
+            } else {
+                msg = 'WebP 변환 완료: 성공 ' + totals.converted + '개 · 건너뜀 ' + totals.skipped + '개';
+                if (totals.unlink_failed) msg += ' · 원본삭제 실패 ' + totals.unlink_failed + '개';
+                if (totals.errors)        msg += ' · 오류 ' + totals.errors + '개';
+            }
             progDone($progWebp, msg, ok);
             notice(msg, ok);
             loadNonWebp(false);
         });
+    }
+
+    function deleteAllNonWebp() {
+        if (!confirm('WebP가 아닌 이미지(JPEG/PNG/GIF)를 모두 삭제합니다. 복구 불가합니다.\n계속하시겠습니까?')) return;
+        $progWebp = $progWebp || $('#dim-progress-webp');
+        var totalDeleted = 0, totalErrors = 0;
+
+        function step() {
+            prog($progWebp, totalDeleted, 0, '전체 삭제 중');
+            // offset=0 고정: 삭제 후 다음 쿼리에서 자동 제외됨
+            post('get_nonwebp', { limit: 100, offset: 0 }, function(err, d) {
+                if (err || !d.items || !d.items.length) {
+                    var msg = totalDeleted + '개 삭제 완료' + (totalErrors ? ' · 실패 ' + totalErrors + '개' : '');
+                    progDone($progWebp, msg, totalErrors === 0);
+                    notice(msg, totalErrors === 0);
+                    loadNonWebp(false);
+                    return;
+                }
+                var ids = d.items.map(function(item) { return item.id; });
+                post('delete_images', { ids: ids }, function(err2, d2) {
+                    if (!err2) {
+                        totalDeleted += d2.deleted || 0;
+                        totalErrors  += (d2.errors || []).length;
+                    }
+                    step();
+                });
+            });
+        }
+        step();
     }
 
     function deleteSelected() {
@@ -573,6 +611,143 @@
         });
     }
 
+    function deleteAllUnused() {
+        if (!confirm('스캔된 미사용 이미지를 전부 삭제합니다. 복구 불가합니다.\n계속하시겠습니까?')) return;
+        if (!$progUnused || !$progUnused.length) $progUnused = $('#dim-progress-unused');
+        var totalDeleted = 0, totalErrors = 0;
+
+        function step() {
+            prog($progUnused, totalDeleted, 0, '전체 삭제 중');
+            // offset=0 고정: 삭제 후 다음 쿼리에서 자동 제외됨
+            post('scan_unused', { limit: 100, offset: 0 }, function(err, d) {
+                if (err || !d.items || !d.items.length) {
+                    var msg = totalDeleted + '개 삭제 완료' + (totalErrors ? ' · 실패 ' + totalErrors + '개' : '');
+                    progDone($progUnused, msg, totalErrors === 0);
+                    notice(msg, totalErrors === 0);
+                    loadUnused(false);
+                    return;
+                }
+                var ids = d.items.map(function(item) { return item.id; });
+                post('delete_images', { ids: ids }, function(err2, d2) {
+                    if (!err2) {
+                        totalDeleted += d2.deleted || 0;
+                        totalErrors  += (d2.errors || []).length;
+                    }
+                    step(); // 삭제 후 다시 스캔
+                });
+            });
+        }
+        step();
+    }
+
+    // ═══════════════════════════════════
+    // ⑥ 이미지 오류 글
+    // ═══════════════════════════════════
+    var $progBroken     = null;
+    var brokenOffset    = 0;
+    var brokenScanned   = 0;
+    var brokenFound     = 0;
+
+    function loadBrokenImgPosts(append) {
+        $progBroken = $('#dim-progress-brokenimg');
+        if (!append) {
+            brokenOffset = 0; brokenScanned = 0; brokenFound = 0;
+            $('#dim-brokenimg-list').empty();
+            $('#dim-brokenimg-summary').hide();
+        }
+        prog($progBroken, brokenOffset, 0, '스캔 중');
+        post('get_broken_img_posts', { limit: 50, offset: brokenOffset }, function(err, d) {
+            if (err) { progDone($progBroken, err.message, false); return notice(err.message, false); }
+
+            brokenScanned += d.total_scanned || 0;
+            brokenFound   += d.items.length;
+            $('#dim-brokenimg-scanned').text(brokenScanned);
+            $('#dim-brokenimg-count').text(brokenFound);
+            $('#dim-brokenimg-summary').show();
+
+            var tmpl   = $('#dim-nothumb-item-tmpl').html();
+            var adminUrl = DIM.admin_url;
+            d.items.forEach(function(item) {
+                var editUrl = item.edit_url || (adminUrl + 'post.php?post=' + item.id + '&action=edit');
+                $('#dim-brokenimg-list').append(tmpl
+                    .replace(/\{\{title\}\}/g,   esc(item.title || '(제목 없음)'))
+                    .replace(/\{\{type\}\}/g,    item.type === 'page' ? '페이지' : '글')
+                    .replace(/\{\{date\}\}/g,    (item.date || '').slice(0, 10))
+                    .replace(/\{\{edit_url\}\}/g, editUrl)
+                );
+            });
+
+            brokenOffset += 50;
+            $('#dim-brokenimg-more-wrap').toggle(!!d.has_more);
+
+            if (!d.has_more) {
+                var msg = brokenFound
+                    ? brokenScanned + '개 스캔 완료 — 오류 이미지 있는 글 ' + brokenFound + '개'
+                    : brokenScanned + '개 스캔 완료 — 이미지 오류 글 없음 ✅';
+                progDone($progBroken, msg, true);
+            } else {
+                prog($progBroken, brokenOffset, 0, '스캔 중');
+            }
+
+            if (!brokenFound && !d.has_more) {
+                $('#dim-brokenimg-list').html('<p style="padding:16px">이미지 오류 글이 없습니다 ✅</p>');
+            }
+        });
+    }
+
+    // ═══════════════════════════════════
+    // ⑦ H2 아래 이미지 없는 글
+    // ═══════════════════════════════════
+    var $progH2     = null;
+    var h2Offset    = 0;
+    var h2Scanned   = 0;
+    var h2Found     = 0;
+
+    function loadH2NoImgPosts(append) {
+        $progH2 = $('#dim-progress-h2noimg');
+        if (!append) {
+            h2Offset = 0; h2Scanned = 0; h2Found = 0;
+            $('#dim-h2noimg-list').empty();
+            $('#dim-h2noimg-summary').hide();
+        }
+        prog($progH2, h2Offset, 0, '스캔 중');
+        post('get_h2_no_img_posts', { limit: 50, offset: h2Offset }, function(err, d) {
+            if (err) { progDone($progH2, err.message, false); return notice(err.message, false); }
+
+            h2Scanned += d.total_scanned || 0;
+            h2Found   += d.items.length;
+            $('#dim-h2noimg-scanned').text(h2Scanned);
+            $('#dim-h2noimg-count').text(h2Found);
+            $('#dim-h2noimg-summary').show();
+
+            var tmpl     = $('#dim-nothumb-item-tmpl').html();
+            var adminUrl = DIM.admin_url;
+            d.items.forEach(function(item) {
+                var editUrl = item.edit_url || (adminUrl + 'post.php?post=' + item.id + '&action=edit');
+                $('#dim-h2noimg-list').append(tmpl
+                    .replace(/\{\{title\}\}/g,    esc(item.title || '(제목 없음)'))
+                    .replace(/\{\{type\}\}/g,     item.type === 'page' ? '페이지' : '글')
+                    .replace(/\{\{date\}\}/g,     (item.date || '').slice(0, 10))
+                    .replace(/\{\{edit_url\}\}/g,  editUrl)
+                );
+            });
+
+            h2Offset += 50;
+            $('#dim-h2noimg-more-wrap').toggle(!!d.has_more);
+
+            if (!d.has_more) {
+                var msg = h2Found
+                    ? h2Scanned + '개 스캔 완료 — H2 이미지 누락 ' + h2Found + '개'
+                    : h2Scanned + '개 스캔 완료 — 모든 H2 아래 이미지 있음 ✅';
+                progDone($progH2, msg, true);
+            }
+
+            if (!h2Found && !d.has_more) {
+                $('#dim-h2noimg-list').html('<p style="padding:16px">H2 이미지 누락 글이 없습니다 ✅</p>');
+            }
+        });
+    }
+
     // ═══════════════════════════════════
     // ④ 용량 현황
     // ═══════════════════════════════════
@@ -683,6 +858,7 @@
         $('#dim-convert-selected-btn').on('click', convertSelected);
         $('#dim-convert-all-btn').on('click', convertAll);
         $('#dim-delete-nonwebp-btn').on('click', deleteSelected);
+        $('#dim-delete-all-nonwebp-btn').on('click', deleteAllNonWebp);
         $('#dim-nonwebp-more-btn').on('click', function(){ loadNonWebp(true); });
         $('#dim-nonwebp-select-all').on('change', function(){
             $('.dim-nw-checkbox').prop('checked', this.checked); updateNwCount();
@@ -699,11 +875,20 @@
         // 탭 ⑤
         $('#dim-scan-unused-btn').on('click', function(){ loadUnused(false); });
         $('#dim-delete-unused-btn').on('click', deleteUnused);
+        $('#dim-delete-all-unused-btn').on('click', deleteAllUnused);
         $('#dim-unused-more-btn').on('click', function(){ loadUnused(true); });
         $('#dim-unused-select-all').on('change', function(){
             $('.dim-unused-checkbox').prop('checked', this.checked); updateUnusedCount();
         });
         $(document).on('change', '.dim-unused-checkbox', updateUnusedCount);
+
+        // 탭 ⑥ 이미지 오류 글
+        $('#dim-scan-brokenimg-btn').on('click', function(){ loadBrokenImgPosts(false); });
+        $('#dim-brokenimg-more-btn').on('click', function(){ loadBrokenImgPosts(true); });
+
+        // 탭 ⑦ H2 아래 이미지 없는 글
+        $('#dim-scan-h2noimg-btn').on('click', function(){ loadH2NoImgPosts(false); });
+        $('#dim-h2noimg-more-btn').on('click', function(){ loadH2NoImgPosts(true); });
     });
 
 }(jQuery));

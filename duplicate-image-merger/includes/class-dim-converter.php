@@ -3,8 +3,33 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 class DIM_Converter {
 
+    /**
+     * 실제로 1×1 WebP 파일을 생성해 변환 가능 여부를 검증
+     */
     public function can_convert() {
-        return function_exists( 'imagewebp' ) || extension_loaded( 'imagick' );
+        $tmp = wp_upload_dir()['basedir'] . '/dim_webp_probe_' . time() . '.webp';
+
+        if ( extension_loaded( 'imagick' ) ) {
+            try {
+                $img = new Imagick();
+                $img->newImage( 1, 1, new ImagickPixel( 'white' ) );
+                $img->setImageFormat( 'webp' );
+                $img->writeImage( $tmp );
+                $img->destroy();
+                if ( file_exists( $tmp ) ) { @unlink( $tmp ); return true; }
+            } catch ( Exception $e ) {}
+        }
+
+        if ( function_exists( 'imagewebp' ) ) {
+            $img = @imagecreatetruecolor( 1, 1 );
+            if ( $img ) {
+                $ok = @imagewebp( $img, $tmp, 82 );
+                imagedestroy( $img );
+                if ( $ok && file_exists( $tmp ) ) { @unlink( $tmp ); return true; }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -87,6 +112,8 @@ class DIM_Converter {
     }
 
     private function do_convert( string $src, string $dest, string $mime ) {
+        if ( ! is_writable( dirname( $dest ) ) ) return '업로드 디렉토리 쓰기 권한 없음';
+
         if ( extension_loaded( 'imagick' ) ) {
             try {
                 $img = new Imagick( $src );
