@@ -282,22 +282,22 @@
         img.src = imgUrl;
     }
 
-    // ── HOC: H2·H3 툴바에 이미지 삽입 버튼 + 이미지 블록에 자르기 버튼 ──
-    var withImageButton = createHigherOrderComponent(
+    // ── HOC 1: H2·H3 툴바에 이미지 삽입 버튼 ────────────────────────
+    var withHeadingButton = createHigherOrderComponent(
         function ( OriginalComponent ) {
-            return function QiiWrapper( props ) {
+            return function QiiHeadingWrapper( props ) {
                 var isHeading = props.name === 'core/heading'
                     && props.attributes
                     && ( props.attributes.level === 2 || props.attributes.level === 3 );
 
-                var isImage = props.name === 'core/image';
+                if ( ! isHeading ) {
+                    return el( OriginalComponent, props );
+                }
 
                 return el(
                     Fragment, null,
                     el( OriginalComponent, props ),
-
-                    // H2·H3: 이미지 삽입 버튼
-                    props.isSelected && isHeading && el(
+                    props.isSelected && el(
                         BlockControls, null,
                         el( ToolbarButton, {
                             icon      : 'format-image',
@@ -305,34 +305,49 @@
                             showTooltip: true,
                             onClick   : openMedia,
                         } )
-                    ),
+                    )
+                );
+            };
+        },
+        'withHeadingButton'
+    );
 
-                    // 이미지 블록: Canvas 자르기 버튼
-                    props.isSelected && isImage && el(
+    wp.hooks.addFilter( 'editor.BlockEdit', 'quick-image-insert/heading-button', withHeadingButton );
+
+    // ── HOC 2: 이미지 블록 툴바에 자유 자르기 버튼 ──────────────────
+    var withCropButton = createHigherOrderComponent(
+        function ( OriginalComponent ) {
+            return function QiiCropWrapper( props ) {
+                if ( props.name !== 'core/image' ) {
+                    return el( OriginalComponent, props );
+                }
+
+                var capturedUrl      = props.attributes.url;
+                var capturedId       = props.attributes.id;
+                var capturedClientId = props.clientId;
+                var capturedAlt      = props.attributes.alt;
+
+                return el(
+                    Fragment, null,
+                    el( OriginalComponent, props ),
+                    props.isSelected && el(
                         BlockControls, null,
                         el( ToolbarButton, {
                             icon      : 'scissors',
                             label     : '자유 자르기',
                             showTooltip: true,
-                            onClick   : ( function ( p ) {
-                                return function () {
-                                    openCropModal(
-                                        p.attributes.url,
-                                        p.attributes.id,
-                                        p.clientId,
-                                        p.attributes.alt
-                                    );
-                                };
-                            } )( props ),
+                            onClick   : function () {
+                                openCropModal( capturedUrl, capturedId, capturedClientId, capturedAlt );
+                            },
                         } )
                     )
                 );
             };
         },
-        'withImageButton'
+        'withCropButton'
     );
 
-    wp.hooks.addFilter( 'editor.BlockEdit', 'quick-image-insert/button', withImageButton );
+    wp.hooks.addFilter( 'editor.BlockEdit', 'quick-image-insert/crop-button', withCropButton );
 
     // ── 불필요한 툴바 버튼 숨기기 (MutationObserver) ─────────────
     var HIDE_LABELS = [
