@@ -79,11 +79,13 @@
     }
 
     function scanBatch(offset, scanned) {
-        prog($progDup, offset, totalImages || offset+200, '스캔 중');
+        var total = totalImages || Math.max(offset + 200, scanned + 200);
+        prog($progDup, scanned, total, '스캔 중');
         post('scan', { offset:offset, batch:200 }, function(err, data){
             if (err) return notice('스캔 실패: '+(err.message||''), false);
             data.duplicates.forEach(function(g){ groups.push(g); });
             var done = scanned + data.total_scanned;
+            prog($progDup, done, totalImages || done + (data.has_more ? 200 : 0), '스캔 중');
             if (data.has_more) { scanBatch(offset+200, done); return; }
             renderDuplicates(done);
         });
