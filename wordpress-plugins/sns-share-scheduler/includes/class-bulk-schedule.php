@@ -1,6 +1,16 @@
 <?php
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+/**
+ * 글 목록에서 여러 글을 선택해 전체 플랫폼에 일괄 예약하는 기능.
+ *
+ * 각 플랫폼은 독립적인 큐를 가지며 플랫폼별로 4시간 간격 유지:
+ *   - 글 A → 모든 플랫폼 +5분 (각 플랫폼 큐가 비어있을 때)
+ *   - 글 B → 모든 플랫폼 +4시간 (각 플랫폼에 이미 A가 있으면)
+ *   - 글 C → 모든 플랫폼 +8시간, ...
+ *
+ * 플랫폼 간 시각은 서로 영향을 주지 않음 (X 큐 ≠ Threads 큐).
+ */
 class SNS_Bulk_Schedule {
 
     const PLATFORMS = [ 'twitter', 'threads', 'pinterest', 'facebook' ];
@@ -13,36 +23,25 @@ class SNS_Bulk_Schedule {
     }
 
     public function add_bulk_actions( $actions ) {
-        $labels = [
-            'twitter'   => '𝕏 X (Twitter)',
-            'threads'   => '⊕ Threads',
-            'pinterest' => '𝑷 Pinterest',
-            'facebook'  => 'f Facebook',
-        ];
-        foreach ( $labels as $key => $label ) {
-            $actions[ 'sns_bulk_' . $key ] = '📅 SNS 예약: ' . $label;
-        }
+        // 전체 플랫폼 동시 예약 (플랫폼별 독립 4시간 간격)
+        $actions['sns_bulk_all'] = '📅 SNS 일괄 예약 (X·Threads·Pinterest·Facebook)';
         return $actions;
     }
 
     public function handle_bulk_action( $redirect_url, $action, $post_ids ) {
-        $prefix = 'sns_bulk_';
-        if ( strpos( $action, $prefix ) !== 0 ) {
+        if ( $action !== 'sns_bulk_all' ) {
             return $redirect_url;
         }
 
-        $platform = str_replace( $prefix, '', $action );
-        if ( ! in_array( $platform, self::PLATFORMS, true ) ) {
-            return $redirect_url;
-        }
-
-        // Sort posts by date ascending (oldest first)
+        // 발행일 오름차순 정렬 (오래된 글 먼저)
         usort( $post_ids, function ( $a, $b ) {
             return get_post_time( 'U', true, $a ) - get_post_time( 'U', true, $b );
         } );
 
         $scheduled = 0;
         $skipped   = 0;
+
+        global $wpdb;
 
         foreach ( $post_ids as $post_id ) {
             $post = get_post( $post_id );
@@ -51,27 +50,28 @@ class SNS_Bulk_Schedule {
                 continue;
             }
 
-            $data      = SNS_Content_Generator::generate( $post_id, $platform );
-            $slot      = SNS_Scheduler::get_next_slot_static( $platform );
+            // 각 플랫폼은 독립적으로 자신의 큐에서 다음 슬롯 계산
+            foreach ( self::PLATFORMS as $platform ) {
+                $data = SNS_Content_Generator::generate( $post_id, $platform );
+                $slot = SNS_Scheduler::get_next_slot_static( $platform );
 
-            global $wpdb;
-            $wpdb->insert( $wpdb->prefix . 'sns_share_queue', [
-                'post_id'      => $post_id,
-                'platform'     => $platform,
-                'content'      => $data['content'],
-                'image_url'    => $data['image_url'],
-                'post_url'     => $data['post_url'],
-                'scheduled_at' => date( 'Y-m-d H:i:s', $slot ),
-                'status'       => 'pending',
-            ] );
+                $wpdb->insert( $wpdb->prefix . 'sns_share_queue', [
+                    'post_id'      => $post_id,
+                    'platform'     => $platform,
+                    'content'      => $data['content'],
+                    'image_url'    => $data['image_url'],
+                    'post_url'     => $data['post_url'],
+                    'scheduled_at' => date( 'Y-m-d H:i:s', $slot ),
+                    'status'       => 'pending',
+                ] );
+            }
             $scheduled++;
         }
 
         $redirect_url = add_query_arg( [
-            'sns_bulk_done'     => 1,
-            'sns_platform'      => $platform,
-            'sns_scheduled'     => $scheduled,
-            'sns_skipped'       => $skipped,
+            'sns_bulk_done'  => 1,
+            'sns_scheduled'  => $scheduled,
+            'sns_skipped'    => $skipped,
         ], $redirect_url );
 
         return $redirect_url;
@@ -80,23 +80,16 @@ class SNS_Bulk_Schedule {
     public function show_result_notice() {
         if ( empty( $_GET['sns_bulk_done'] ) ) return;
 
-        $platform  = sanitize_key( $_GET['sns_platform'] ?? '' );
         $scheduled = intval( $_GET['sns_scheduled'] ?? 0 );
         $skipped   = intval( $_GET['sns_skipped'] ?? 0 );
 
-        $platform_labels = [
-            'twitter'   => 'X (Twitter)',
-            'threads'   => 'Threads',
-            'pinterest' => 'Pinterest',
-            'facebook'  => 'Facebook',
-        ];
-        $label = $platform_labels[ $platform ] ?? $platform;
-
         if ( $scheduled > 0 ) {
-            echo '<div class="notice notice-success is-dismissible">';
-            echo '<p>✅ <strong>' . esc_html( $label ) . '</strong>에 ' . esc_html( $scheduled ) . '개 글이 4시간 간격으로 순차 예약되었습니다.';
+            $total = $scheduled * count( self::PLATFORMS );
+            echo '<div class="notice notice-success is-dismissible"><p>';
+            echo '✅ <strong>' . esc_html( $scheduled ) . '개 글</strong>을 X·Threads·Pinterest·Facebook에 일괄 예약했습니다. ';
+            echo '(총 ' . esc_html( $total ) . '건, 플랫폼별 4시간 간격)';
             if ( $skipped ) {
-                echo ' (' . esc_html( $skipped ) . '개는 미발행 상태로 건너뜀)';
+                echo ' &nbsp;⚠️ 미발행 ' . esc_html( $skipped ) . '개 건너뜀';
             }
             echo ' &nbsp;<a href="' . esc_url( admin_url( 'edit.php?page=sns-share-status' ) ) . '">예약 현황 보기 →</a>';
             echo '</p></div>';
