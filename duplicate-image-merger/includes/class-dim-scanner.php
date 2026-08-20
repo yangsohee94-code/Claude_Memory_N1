@@ -78,25 +78,34 @@ class DIM_Scanner {
             $post_map[ (int) $r->ID ] = $r;
         }
 
-        // ② 파일 경로 (_wp_attached_file, 1 쿼리)
+        // ② URL (_wp_attached_file, 1 쿼리) — 파일시스템 미사용
         $upload   = wp_upload_dir();
-        $base_dir = trailingslashit( $upload['basedir'] );
         $base_url = trailingslashit( $upload['baseurl'] );
 
-        $meta_rows = $wpdb->get_results(
+        $file_rows = $wpdb->get_results(
             "SELECT post_id, meta_value
              FROM {$wpdb->postmeta}
              WHERE post_id IN ($id_list) AND meta_key = '_wp_attached_file'"
         );
-        $file_map = [];
-        $url_map  = [];
-        foreach ( $meta_rows as $m ) {
-            $id = (int) $m->post_id;
-            $file_map[ $id ] = $base_dir . $m->meta_value;
-            $url_map[ $id ]  = $base_url . $m->meta_value;
+        $url_map = [];
+        foreach ( $file_rows as $m ) {
+            $url_map[ (int) $m->post_id ] = $base_url . $m->meta_value;
         }
 
-        // ③ 썸네일로 사용 중인 ID (1 쿼리)
+        // ③ 파일 크기 (_wp_attachment_metadata, 1 쿼리) — 파일시스템 미사용
+        $size_rows = $wpdb->get_results(
+            "SELECT post_id, meta_value
+             FROM {$wpdb->postmeta}
+             WHERE post_id IN ($id_list) AND meta_key = '_wp_attachment_metadata'"
+        );
+        $size_map = [];
+        foreach ( $size_rows as $m ) {
+            $data = maybe_unserialize( $m->meta_value );
+            // filesize key: WordPress 6.0+; fallback 0
+            $size_map[ (int) $m->post_id ] = isset( $data['filesize'] ) ? (int) $data['filesize'] : 0;
+        }
+
+        // ④ 썸네일로 사용 중인 ID (1 쿼리)
         $thumb_used = $this->get_thumbnail_ids();
 
         $enriched = [];
@@ -104,12 +113,11 @@ class DIM_Scanner {
             $items = [];
             foreach ( $g['ids'] as $id ) {
                 $id   = (int) $id;
-                $file = $file_map[ $id ] ?? null;
                 $post = $post_map[ $id ] ?? null;
 
                 $items[] = [
                     'id'        => $id,
-                    'file_size' => ( $file && file_exists( $file ) ) ? (int) filesize( $file ) : 0,
+                    'file_size' => $size_map[ $id ] ?? 0,
                     'url'       => $url_map[ $id ] ?? '',
                     'is_used'   => in_array( $id, $thumb_used, true ),
                     'title'     => $post ? $post->post_title : '',
