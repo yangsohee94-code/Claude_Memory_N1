@@ -523,13 +523,15 @@
 
             var tmpl = $('#dim-nothumb-item-tmpl').html();
             var adminUrl = DIM.admin_url;
+            var ntNum = ntOffset;
             d.items.forEach(function(item){
                 var editUrl = adminUrl+'post.php?post='+item.ID+'&action=edit';
                 $('#dim-nothumb-list').append(tmpl
-                    .replace(/\{\{title\}\}/g,    esc(item.post_title || '(제목 없음)'))
-                    .replace(/\{\{type\}\}/g,      item.post_type === 'page' ? '페이지' : '글')
-                    .replace(/\{\{date\}\}/g,      (item.post_date||'').slice(0,10))
-                    .replace(/\{\{edit_url\}\}/g,  editUrl)
+                    .replace(/\{\{num\}\}/g,       ++ntNum)
+                    .replace(/\{\{title\}\}/g,     esc(item.post_title || '(제목 없음)'))
+                    .replace(/\{\{type\}\}/g,       item.post_type === 'page' ? '페이지' : '글')
+                    .replace(/\{\{date\}\}/g,       (item.post_date||'').slice(0,10))
+                    .replace(/\{\{edit_url\}\}/g,   editUrl)
                 );
             });
 
@@ -662,20 +664,28 @@
             if (err) { progDone($progBroken, err.message, false); return notice(err.message, false); }
 
             brokenScanned += d.total_scanned || 0;
+            var prevFound  = brokenFound;
             brokenFound   += d.items.length;
             $('#dim-brokenimg-scanned').text(brokenScanned);
             $('#dim-brokenimg-count').text(brokenFound);
             $('#dim-brokenimg-summary').show();
 
-            var tmpl   = $('#dim-nothumb-item-tmpl').html();
+            var tmpl     = $('#dim-brokenimg-item-tmpl').html();
             var adminUrl = DIM.admin_url;
-            d.items.forEach(function(item) {
+            d.items.forEach(function(item, i) {
                 var editUrl = item.edit_url || (adminUrl + 'post.php?post=' + item.id + '&action=edit');
+                var brokenHtml = (item.broken_ids && item.broken_ids.length)
+                    ? item.broken_ids.map(function(bid) {
+                        return '<span class="dim-broken-id-badge">이미지 ID ' + bid + '</span>';
+                      }).join(' ')
+                    : '';
                 $('#dim-brokenimg-list').append(tmpl
-                    .replace(/\{\{title\}\}/g,   esc(item.title || '(제목 없음)'))
-                    .replace(/\{\{type\}\}/g,    item.type === 'page' ? '페이지' : '글')
-                    .replace(/\{\{date\}\}/g,    (item.date || '').slice(0, 10))
-                    .replace(/\{\{edit_url\}\}/g, editUrl)
+                    .replace(/\{\{num\}\}/g,           prevFound + i + 1)
+                    .replace(/\{\{title\}\}/g,          esc(item.title || '(제목 없음)'))
+                    .replace(/\{\{type\}\}/g,           item.type === 'page' ? '페이지' : '글')
+                    .replace(/\{\{date\}\}/g,           (item.date || '').slice(0, 10))
+                    .replace(/\{\{edit_url\}\}/g,        editUrl)
+                    .replace(/\{\{broken_ids_html\}\}/g, brokenHtml)
                 );
             });
 
@@ -717,6 +727,7 @@
             if (err) { progDone($progH2, err.message, false); return notice(err.message, false); }
 
             h2Scanned += d.total_scanned || 0;
+            var h2Prev = h2Found;
             h2Found   += d.items.length;
             $('#dim-h2noimg-scanned').text(h2Scanned);
             $('#dim-h2noimg-count').text(h2Found);
@@ -724,13 +735,14 @@
 
             var tmpl     = $('#dim-nothumb-item-tmpl').html();
             var adminUrl = DIM.admin_url;
-            d.items.forEach(function(item) {
+            d.items.forEach(function(item, i) {
                 var editUrl = item.edit_url || (adminUrl + 'post.php?post=' + item.id + '&action=edit');
                 $('#dim-h2noimg-list').append(tmpl
-                    .replace(/\{\{title\}\}/g,    esc(item.title || '(제목 없음)'))
-                    .replace(/\{\{type\}\}/g,     item.type === 'page' ? '페이지' : '글')
-                    .replace(/\{\{date\}\}/g,     (item.date || '').slice(0, 10))
-                    .replace(/\{\{edit_url\}\}/g,  editUrl)
+                    .replace(/\{\{num\}\}/g,      h2Prev + i + 1)
+                    .replace(/\{\{title\}\}/g,     esc(item.title || '(제목 없음)'))
+                    .replace(/\{\{type\}\}/g,      item.type === 'page' ? '페이지' : '글')
+                    .replace(/\{\{date\}\}/g,      (item.date || '').slice(0, 10))
+                    .replace(/\{\{edit_url\}\}/g,   editUrl)
                 );
             });
 

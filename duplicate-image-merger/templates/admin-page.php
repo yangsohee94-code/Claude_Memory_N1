@@ -308,8 +308,19 @@
 
 <script type="text/html" id="dim-nothumb-item-tmpl">
 <div class="dim-nt-item">
+    <span class="dim-nt-num">{{num}}</span>
     <span class="dim-nt-type">{{type}}</span>
     <a href="{{edit_url}}" target="_blank"><strong>{{title}}</strong></a>
     <span class="dim-muted">{{date}}</span>
+</div>
+</script>
+
+<script type="text/html" id="dim-brokenimg-item-tmpl">
+<div class="dim-nt-item">
+    <span class="dim-nt-num">{{num}}</span>
+    <span class="dim-nt-type">{{type}}</span>
+    <a href="{{edit_url}}" target="_blank"><strong>{{title}}</strong></a>
+    <span class="dim-muted">{{date}}</span>
+    <span class="dim-broken-ids">{{broken_ids_html}}</span>
 </div>
 </script>

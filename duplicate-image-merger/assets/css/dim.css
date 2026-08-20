@@ -115,16 +115,26 @@
 
 /* 대표이미지 없는 글 */
 .dim-nt-item {
-    display: flex; align-items: center; gap: 12px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     padding: 10px 14px; background: #fff;
     border: 1px solid #dcdcde; border-radius: 4px; margin-bottom: 6px;
     font-size: 13px;
+}
+.dim-nt-num {
+    min-width: 28px; text-align: right;
+    font-size: 12px; color: #8c8f94; font-weight: 600;
 }
 .dim-nt-type {
     background: #f0f6fc; color: #2271b1; border: 1px solid #c5d9ed;
     font-size: 11px; padding: 2px 7px; border-radius: 10px; white-space: nowrap;
 }
-.dim-nt-item a { flex: 1; }
+.dim-nt-item a { flex: 1; min-width: 120px; }
+.dim-broken-ids { width: 100%; padding-left: 40px; margin-top: 2px; }
+.dim-broken-id-badge {
+    display: inline-block; background: #fcf0f1; color: #d63638;
+    border: 1px solid #f5b8ba; font-size: 11px; padding: 1px 7px;
+    border-radius: 10px; margin-right: 4px; margin-bottom: 2px;
+}
 
 /* 통계 카드 */
 .dim-stats-grid {

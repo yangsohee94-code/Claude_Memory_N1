@@ -275,13 +275,14 @@ class DIM_Stats {
             }
         }
 
-        $broken_post_ids = [];
+        $broken_post_ids  = [];
+        $broken_post_imgs = []; // post_id => [att_id, ...]
 
         if ( ! empty( $att_to_posts ) ) {
             $all_ids      = array_keys( $att_to_posts );
             $placeholders = implode( ',', array_fill( 0, count( $all_ids ), '%d' ) );
 
-            // 단일 JOIN 쿼리로 ID 존재 여부 + 파일 경로 동시 조회 (get_attached_file 반복 호출 제거)
+            // 단일 JOIN 쿼리로 ID 존재 여부 + 파일 경로 동시 조회
             $rows = $wpdb->get_results( $wpdb->prepare(
                 "SELECT p.ID, m.meta_value AS rel_path
                  FROM {$wpdb->posts} p
@@ -293,14 +294,15 @@ class DIM_Stats {
                 ...$all_ids
             ) );
 
-            $found_ids     = [];
-            $upload_base   = wp_upload_dir()['basedir'];
+            $found_ids   = [];
+            $upload_base = wp_upload_dir()['basedir'];
             foreach ( $rows as $row ) {
                 $found_ids[ (int) $row->ID ] = true;
                 $abs = $row->rel_path ? trailingslashit( $upload_base ) . $row->rel_path : '';
                 if ( ! $abs || ! file_exists( $abs ) ) {
                     foreach ( $att_to_posts[ (int) $row->ID ] ?? [] as $post_id ) {
-                        $broken_post_ids[ $post_id ] = true;
+                        $broken_post_ids[ $post_id ]              = true;
+                        $broken_post_imgs[ $post_id ][]           = (int) $row->ID;
                     }
                 }
             }
@@ -309,7 +311,8 @@ class DIM_Stats {
             foreach ( $all_ids as $aid ) {
                 if ( ! isset( $found_ids[ $aid ] ) ) {
                     foreach ( $att_to_posts[ $aid ] ?? [] as $post_id ) {
-                        $broken_post_ids[ $post_id ] = true;
+                        $broken_post_ids[ $post_id ]    = true;
+                        $broken_post_imgs[ $post_id ][] = $aid;
                     }
                 }
             }
@@ -319,11 +322,12 @@ class DIM_Stats {
         foreach ( $posts as $post ) {
             if ( isset( $broken_post_ids[ $post->ID ] ) ) {
                 $items[] = [
-                    'id'       => (int) $post->ID,
-                    'title'    => $post->post_title,
-                    'type'     => $post->post_type,
-                    'date'     => $post->post_date,
-                    'edit_url' => get_edit_post_link( $post->ID, 'raw' ),
+                    'id'         => (int) $post->ID,
+                    'title'      => $post->post_title,
+                    'type'       => $post->post_type,
+                    'date'       => $post->post_date,
+                    'edit_url'   => get_edit_post_link( $post->ID, 'raw' ),
+                    'broken_ids' => array_values( array_unique( $broken_post_imgs[ $post->ID ] ?? [] ) ),
                 ];
             }
         }
