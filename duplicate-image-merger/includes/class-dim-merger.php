@@ -62,7 +62,7 @@ class DIM_Merger {
         $items = $group['items'];
 
         // 사용 중인 이미지 중 가장 오래된(ID가 작은) 것을 원본으로
-        usort( $items, fn( $a, $b ) => $a['id'] - $b['id'] );
+        usort( $items, function( $a, $b ) { return $a['id'] - $b['id']; } );
 
         $keep = null;
         foreach ( $items as $item ) {
@@ -71,13 +71,13 @@ class DIM_Merger {
                 break;
             }
         }
-        // 사용 중인 이미지가 없으면 가장 오래된 것 유지
         if ( ! $keep ) {
             $keep = $items[0];
         }
 
+        $keep_id    = $keep['id'];
         $delete_ids = array_column(
-            array_filter( $items, fn( $i ) => $i['id'] !== $keep['id'] ),
+            array_filter( $items, function( $i ) use ( $keep_id ) { return $i['id'] !== $keep_id; } ),
             'id'
         );
 

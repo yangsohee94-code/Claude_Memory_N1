@@ -98,12 +98,15 @@ class DIM_Converter {
 
         if ( ! function_exists( 'imagewebp' ) ) return 'WebP 미지원 서버';
 
-        $img = match ( $mime ) {
-            'image/jpeg' => @imagecreatefromjpeg( $src ),
-            'image/png'  => @imagecreatefrompng( $src ),
-            'image/gif'  => @imagecreatefromgif( $src ),
-            default      => false,
-        };
+        if ( $mime === 'image/jpeg' ) {
+            $img = @imagecreatefromjpeg( $src );
+        } elseif ( $mime === 'image/png' ) {
+            $img = @imagecreatefrompng( $src );
+        } elseif ( $mime === 'image/gif' ) {
+            $img = @imagecreatefromgif( $src );
+        } else {
+            $img = false;
+        }
         if ( ! $img ) return '이미지 로드 실패';
 
         $ok = imagewebp( $img, $dest, 82 );

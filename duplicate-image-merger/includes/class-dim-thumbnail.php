@@ -72,7 +72,8 @@ class DIM_Thumbnail {
     private function find_attached_image( int $post_id ): int {
         $images = get_attached_media( 'image', $post_id );
         if ( $images ) {
-            return (int) array_key_first( $images );
+            reset( $images );
+            return (int) key( $images );
         }
         return 0;
     }
