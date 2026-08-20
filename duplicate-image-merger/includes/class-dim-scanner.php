@@ -52,39 +52,68 @@ class DIM_Scanner {
 
     /**
      * 중복 그룹 ID 목록 → 상세 정보(is_used 포함) 한꺼번에 조회
-     * 스캔 완료 후 중복 그룹에 한해서만 호출하므로 쿼리 수가 대폭 감소
+     * 3개의 bulk 쿼리만 사용 — 개별 WP API 호출 없음
      */
     public function enrich_groups( array $groups ) {
         if ( empty( $groups ) ) return [];
 
-        // 필요한 ID만 수집
+        global $wpdb;
+
         $all_ids = [];
         foreach ( $groups as $g ) {
-            foreach ( $g['ids'] as $id ) $all_ids[] = $id;
+            foreach ( $g['ids'] as $id ) $all_ids[] = (int) $id;
         }
         $all_ids = array_unique( $all_ids );
 
-        // 썸네일로 사용 중인 ID 목록 (단 1쿼리)
-        $thumb_used = $this->get_thumbnail_ids();
+        // 안전한 정수 목록 (prepare 대신 intval 사용)
+        $id_list = implode( ',', $all_ids );
 
-        // 본문에서 사용 중인 attachment ID (단 1쿼리로 URL 기반 검색)
-        $content_used = $this->get_content_used_ids( $all_ids );
+        // ① 게시물 제목·날짜·URL (1 쿼리)
+        $post_rows = $wpdb->get_results(
+            "SELECT ID, post_title, post_date, guid
+             FROM {$wpdb->posts} WHERE ID IN ($id_list)"
+        );
+        $post_map = [];
+        foreach ( $post_rows as $r ) {
+            $post_map[ (int) $r->ID ] = $r;
+        }
+
+        // ② 파일 경로 (_wp_attached_file, 1 쿼리)
+        $upload   = wp_upload_dir();
+        $base_dir = trailingslashit( $upload['basedir'] );
+        $base_url = trailingslashit( $upload['baseurl'] );
+
+        $meta_rows = $wpdb->get_results(
+            "SELECT post_id, meta_value
+             FROM {$wpdb->postmeta}
+             WHERE post_id IN ($id_list) AND meta_key = '_wp_attached_file'"
+        );
+        $file_map = [];
+        $url_map  = [];
+        foreach ( $meta_rows as $m ) {
+            $id = (int) $m->post_id;
+            $file_map[ $id ] = $base_dir . $m->meta_value;
+            $url_map[ $id ]  = $base_url . $m->meta_value;
+        }
+
+        // ③ 썸네일로 사용 중인 ID (1 쿼리)
+        $thumb_used = $this->get_thumbnail_ids();
 
         $enriched = [];
         foreach ( $groups as $g ) {
             $items = [];
             foreach ( $g['ids'] as $id ) {
-                $file    = get_attached_file( $id );
-                $is_used = in_array( $id, $thumb_used, true )
-                        || in_array( $id, $content_used, true );
+                $id   = (int) $id;
+                $file = $file_map[ $id ] ?? null;
+                $post = $post_map[ $id ] ?? null;
 
                 $items[] = [
                     'id'        => $id,
                     'file_size' => ( $file && file_exists( $file ) ) ? (int) filesize( $file ) : 0,
-                    'url'       => wp_get_attachment_url( $id ),
-                    'is_used'   => $is_used,
-                    'title'     => get_the_title( $id ),
-                    'date'      => get_the_date( 'Y-m-d H:i', $id ),
+                    'url'       => $url_map[ $id ] ?? '',
+                    'is_used'   => in_array( $id, $thumb_used, true ),
+                    'title'     => $post ? $post->post_title : '',
+                    'date'      => $post ? substr( $post->post_date, 0, 16 ) : '',
                 ];
             }
             $enriched[] = [
@@ -128,23 +157,6 @@ class DIM_Scanner {
         );
         $this->thumbnail_ids = array_map( 'intval', $rows );
         return $this->thumbnail_ids;
-    }
-
-    private function get_content_used_ids( array $ids ): array {
-        global $wpdb;
-        $used = [];
-        foreach ( $ids as $id ) {
-            $url = wp_get_attachment_url( $id );
-            if ( ! $url ) continue;
-            $found = $wpdb->get_var( $wpdb->prepare(
-                "SELECT COUNT(*) FROM {$wpdb->posts}
-                 WHERE post_status NOT IN ('trash','auto-draft')
-                   AND post_content LIKE %s LIMIT 1",
-                '%' . $wpdb->esc_like( basename( $url ) ) . '%'
-            ) );
-            if ( $found ) $used[] = (int) $id;
-        }
-        return $used;
     }
 
     public function get_total_images() {

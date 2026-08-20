@@ -102,7 +102,7 @@
         });
     }
 
-    var ENRICH_BATCH = 25;
+    var ENRICH_BATCH = 50;
 
     function enrichGroups(scanned) {
         if (!rawGroups.length) {
