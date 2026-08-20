@@ -111,44 +111,61 @@
                     frame.on( 'insert', function () {
                         var selection = frame.state().get( 'selection' );
 
-                        // 스냅샷 clientId 기준으로 인덱스 계산
+                        // 현재 글의 H2 블록 개수 계산
+                        var h2Count = wp.data
+                            .select( 'core/block-editor' )
+                            .getBlocks()
+                            .filter( function ( b ) {
+                                return b.name === 'core/heading' && b.attributes.level === 2;
+                            } ).length;
+
+                        // 선택한 이미지 전체를 배열로 변환
+                        var allAttachments = [];
+                        selection.each( function ( attachment ) {
+                            allAttachments.push( attachment.toJSON() );
+                        } );
+
+                        if ( allAttachments.length === 0 ) return;
+
+                        // H2 개수만큼만 삽입, 나머지는 미디어에서 영구 삭제
+                        var limit     = h2Count > 0 ? h2Count : allAttachments.length;
+                        var toInsert  = allAttachments.slice( 0, limit );
+                        var toDelete  = allAttachments.slice( limit );
+
+                        // ① 초과 이미지 → 미디어 라이브러리에서 즉시 삭제
+                        toDelete.forEach( function ( data ) {
+                            wp.apiFetch( {
+                                path: '/wp/v2/media/' + data.id + '?force=true',
+                                method: 'DELETE',
+                            } ).catch( function ( err ) {
+                                console.warn( '[QII] 미디어 삭제 실패 ID=' + data.id, err );
+                            } );
+                        } );
+
+                        // ② 스냅샷 clientId 기준으로 삽입 위치 계산
                         var insertIndex =
                             wp.data
                                 .select( 'core/block-editor' )
                                 .getBlockIndex( snapshotClientId ) + 1;
 
-                        var imageBlocks = [];
-                        var firstImageId = null;
-
-                        selection.each( function ( attachment ) {
-                            var data = attachment.toJSON();
-                            // 첫 번째 이미지 ID 기록
-                            if ( firstImageId === null ) {
-                                firstImageId = data.id;
-                            }
-                            imageBlocks.push(
-                                createBlock( 'core/image', {
-                                    url: data.url,
-                                    alt: data.alt || data.title || '',
-                                    caption: '',
-                                    id: data.id,
-                                } )
-                            );
+                        var imageBlocks = toInsert.map( function ( data ) {
+                            return createBlock( 'core/image', {
+                                url: data.url,
+                                alt: data.alt || data.title || '',
+                                caption: '',
+                                id: data.id,
+                            } );
                         } );
 
-                        if ( imageBlocks.length === 0 ) return;
-
-                        // 현재 블록 바로 아래에 순서대로 삽입
+                        // ③ 현재 블록 바로 아래에 순서대로 삽입
                         wp.data
                             .dispatch( 'core/block-editor' )
                             .insertBlocks( imageBlocks, insertIndex );
 
-                        // 첫 번째 이미지를 대표이미지로 자동 설정
-                        if ( firstImageId ) {
-                            wp.data
-                                .dispatch( 'core/editor' )
-                                .editPost( { featured_media: firstImageId } );
-                        }
+                        // ④ 첫 번째 이미지를 대표이미지로 자동 설정
+                        wp.data
+                            .dispatch( 'core/editor' )
+                            .editPost( { featured_media: toInsert[ 0 ].id } );
                     } );
 
                     frame.open();
