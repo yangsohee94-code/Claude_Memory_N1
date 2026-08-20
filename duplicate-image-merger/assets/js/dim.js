@@ -666,15 +666,18 @@
             if (err) { progDone($progBroken, err.message, false); return notice(err.message, false); }
 
             brokenScanned += d.total_scanned || 0;
+            var realItems  = (d.items || []).filter(function(item) {
+                return item.broken_ids && item.broken_ids.length > 0;
+            });
             var prevFound  = brokenFound;
-            brokenFound   += d.items.length;
+            brokenFound   += realItems.length;
             $('#dim-brokenimg-scanned').text(brokenScanned);
             $('#dim-brokenimg-count').text(brokenFound);
             $('#dim-brokenimg-summary').show();
 
             var tmpl     = $('#dim-brokenimg-item-tmpl').html();
             var adminUrl = DIM.admin_url;
-            d.items.forEach(function(item, i) {
+            realItems.forEach(function(item, i) {
                 var editUrl = item.edit_url || (adminUrl + 'post.php?post=' + item.id + '&action=edit');
                 var brokenCount = (item.broken_ids && item.broken_ids.length) ? item.broken_ids.length : 0;
                 var brokenHtml  = brokenCount
