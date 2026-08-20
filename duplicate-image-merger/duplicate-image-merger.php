@@ -11,6 +11,24 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+// ── 세션 만료: 7일 비활동 시 만료 ────────────────────────────────────────────
+// 쿠키 유효기간을 7일로 설정 (remember me 여부 무관)
+add_filter( 'auth_cookie_expiration', function ( $expiration, $user_id, $remember ) {
+    return 7 * DAY_IN_SECONDS; // 604800초
+}, 10, 3 );
+
+// 로그인 상태일 때 매 페이지 로드마다 쿠키를 갱신 → 마지막 접속 기준 7일로 초기화
+add_action( 'wp_loaded', function () {
+    if ( ! is_user_logged_in() ) return;
+    if ( defined( 'DOING_AJAX' ) && DOING_AJAX ) return;
+    if ( defined( 'DOING_CRON' ) && DOING_CRON ) return;
+    if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) return;
+
+    $user_id = get_current_user_id();
+    wp_set_auth_cookie( $user_id, true, is_ssl() );
+} );
+// ─────────────────────────────────────────────────────────────────────────────
+
 define( 'DIM_VERSION',    '1.1.0' );
 define( 'DIM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DIM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
