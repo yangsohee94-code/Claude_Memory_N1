@@ -27,6 +27,15 @@
     }
     function hideProg($wrap){ if ($wrap && $wrap.length) setTimeout(function(){ $wrap.hide(); }, 700); }
 
+    function progDone($wrap, msg, ok) {
+        if (!$wrap || !$wrap.length) return;
+        var icon = ok ? '✅' : '⚠️';
+        $wrap.show()
+            .find('.dim-progress-bar').css({ width: '100%', background: ok ? '#00a32a' : '#d63638' });
+        $wrap.find('.dim-progress-text').text(icon + ' ' + msg);
+        setTimeout(function(){ $wrap.hide(); $wrap.find('.dim-progress-bar').css({ background: '', width: '0%' }); }, 3000);
+    }
+
     function notice(msg, ok) {
         var $n = $('#dim-notice').removeClass('dim-ok dim-err')
             .addClass(ok ? 'dim-ok' : 'dim-err').html(msg).show();
@@ -200,10 +209,11 @@
             });
         });
         chain.always(function(){
-            hideProg(getProgDup());
-            var msg = merged+'개 병합 완료';
-            if (mergeErrors) msg += ' · 실패 '+mergeErrors+'개';
-            notice(msg, mergeErrors === 0);
+            var ok  = mergeErrors === 0;
+            var msg = merged + '개 병합 완료';
+            if (mergeErrors) msg += ' · 실패 ' + mergeErrors + '개';
+            progDone(getProgDup(), msg, ok);
+            notice(msg, ok);
             startScan();
         });
     }
@@ -251,11 +261,12 @@
             });
         });
         chain.always(function() {
-            clearPendingGroups();  // 정상 완료 — 저장 데이터 삭제
-            hideProg(getProgDup());
+            clearPendingGroups();
+            var ok  = totalErrors.length === 0;
             var msg = totalMerged + '개 병합 완료';
             if (totalErrors.length) msg += ' · 실패 ' + totalErrors.length + '개';
-            notice(msg, totalErrors.length === 0);
+            progDone(getProgDup(), msg, ok);
+            notice(msg, ok);
             startScan();
         });
     }
@@ -263,9 +274,14 @@
     function fixThumbnails() {
         prog(getProgDup(), 0, 0, '대표이미지 확인 중');
         post('fix_thumbnails', {}, function(err, d){
-            hideProg(getProgDup());
-            err ? notice(err.message, false)
-                : notice('대표이미지 수정 완료 — 총 '+d.total_checked+'개 확인 · 연결: '+d.fixed+'개 · 삭제: '+d.cleared+'개', true);
+            if (err) {
+                progDone(getProgDup(), err.message, false);
+                notice(err.message, false);
+            } else {
+                var msg = '대표이미지 수정 완료 — 총 '+d.total_checked+'개 확인 · 연결: '+d.fixed+'개 · 삭제: '+d.cleared+'개';
+                progDone(getProgDup(), msg, true);
+                notice(msg, true);
+            }
         });
     }
 
@@ -383,11 +399,12 @@
             });
         });
         chain.always(function() {
-            hideProg($progWebp);
+            var ok  = totals.errors === 0;
             var msg = '변환 완료: 성공 ' + totals.converted + '개 · 건너뜀 ' + totals.skipped + '개';
             if (totals.unlink_failed) msg += ' · 원본삭제 실패 ' + totals.unlink_failed + '개';
             if (totals.errors) msg += ' · 오류 ' + totals.errors + '개';
-            notice(msg, totals.errors === 0);
+            progDone($progWebp, msg, ok);
+            notice(msg, ok);
             loadNonWebp(false);
         });
     }
@@ -418,11 +435,12 @@
             totals.unlink_failed += d.unlink_failed || 0;
             // 이번 배치에서 뭔가 처리됐고 더 남아있으면 계속
             if (d.has_more && batchDone > 0) { webpBatch(totals); return; }
-            hideProg($progWebp);
+            var ok  = totals.errors === 0;
             var msg = 'WebP 변환 완료: 성공 ' + totals.converted + '개 · 건너뜀 ' + totals.skipped + '개';
             if (totals.unlink_failed) msg += ' · 원본삭제 실패 ' + totals.unlink_failed + '개';
             if (totals.errors) msg += ' · 오류 ' + totals.errors + '개';
-            notice(msg, totals.errors === 0);
+            progDone($progWebp, msg, ok);
+            notice(msg, ok);
             loadNonWebp(false);
         });
     }
@@ -434,9 +452,15 @@
         if (!$progWebp || !$progWebp.length) $progWebp = $('#dim-progress-webp');
         prog($progWebp, 0, 0, '삭제 중');
         post('delete_images', { ids:ids }, function(err, d){
-            hideProg($progWebp);
-            err ? notice(err.message, false)
-                : notice(d.deleted+'개 삭제 완료.', true);
+            if (err) {
+                progDone($progWebp, err.message, false);
+                notice(err.message, false);
+            } else {
+                var msg = d.deleted + '개 삭제 완료';
+                if (d.errors && d.errors.length) msg += ' · 실패 ' + d.errors.length + '개';
+                progDone($progWebp, msg, !d.errors || !d.errors.length);
+                notice(msg, !d.errors || !d.errors.length);
+            }
             loadNonWebp(false);
         });
     }
@@ -536,8 +560,15 @@
         if (!$progUnused || !$progUnused.length) $progUnused = $('#dim-progress-unused');
         prog($progUnused, 0, 0, '삭제 중');
         post('delete_images', { ids: ids }, function(err, d) {
-            hideProg($progUnused);
-            err ? notice(err.message, false) : notice(d.deleted + '개 삭제 완료.', true);
+            if (err) {
+                progDone($progUnused, err.message, false);
+                notice(err.message, false);
+            } else {
+                var msg = d.deleted + '개 삭제 완료';
+                if (d.errors && d.errors.length) msg += ' · 실패 ' + d.errors.length + '개';
+                progDone($progUnused, msg, !d.errors || !d.errors.length);
+                notice(msg, !d.errors || !d.errors.length);
+            }
             loadUnused(false);
         });
     }
