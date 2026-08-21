@@ -3,7 +3,7 @@
  * Plugin Name: Duplicate Image Merger
  * Plugin URI:  https://github.com/yangsohee94-code/claude_memory_n1
  * Description: 중복 이미지 병합 · WebP 변환 · 대표이미지 정합성 자동 최적화
- * Version:     1.3.12
+ * Version:     1.3.13
  * Author:      Claude Memory N1
  * License:     GPL-2.0+
  * Text Domain: duplicate-image-merger
@@ -11,7 +11,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'DIM_VERSION',    '1.3.12' );
+define( 'DIM_VERSION',    '1.3.13' );
 define( 'DIM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DIM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -22,6 +22,24 @@ foreach ( [ 'scanner', 'merger', 'converter', 'thumbnail', 'stats', 'admin', 'aj
 add_action( 'plugins_loaded', function () {
     ( new DIM_Admin() )->init();
     ( new DIM_Ajax()  )->init();
+} );
+
+// ── 업로드 파일명 충돌 방지 ─────────────────────────────────────────
+// maxresdefault.jpg 같이 중복되기 쉬운 이름에 콘텐츠 해시(8자)를 붙여
+// 기존 미디어와 혼재되지 않도록 한다.
+add_filter( 'wp_handle_upload_prefilter', function ( $file ) {
+    // 이미지 업로드만 처리
+    if ( strpos( $file['type'] ?? '', 'image/' ) !== 0 ) return $file;
+
+    $tmp  = $file['tmp_name'] ?? '';
+    $hash = $tmp && file_exists( $tmp ) ? substr( md5_file( $tmp ), 0, 8 ) : substr( md5( uniqid( '', true ) ), 0, 8 );
+
+    $info        = pathinfo( $file['name'] );
+    $ext         = isset( $info['extension'] ) ? '.' . strtolower( $info['extension'] ) : '';
+    $base        = sanitize_file_name( $info['filename'] );
+    $file['name'] = $base . '-' . $hash . $ext;
+
+    return $file;
 } );
 
 // 업로드 즉시 WebP 자동 변환
