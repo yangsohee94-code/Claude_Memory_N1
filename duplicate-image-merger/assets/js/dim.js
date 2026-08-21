@@ -664,12 +664,23 @@
         $btn.prop('disabled', true).text('처리 중...');
         var $prog = $('#dim-progress-brokenimg');
         prog($prog, 0, 0, '글 정리 중');
-        post('remove_broken_blocks', {}, function(err, d) {
+        // 배치 처리로 서버 측 최대 300초 허용 → JS 타임아웃을 330초로 설정
+        $.ajax({
+            url: DIM.ajax_url, type: 'POST', timeout: 330000,
+            data: { action: 'dim_remove_broken_blocks', nonce: DIM.nonce }
+        })
+        .done(function(r) {
             hideProg($prog);
             $btn.prop('disabled', false).text('🧹 엑박 블록 글에서 자동 제거');
-            if (err) { notice(err.message, false); return; }
+            if (!r.success) { notice((r.data && r.data.message) || '처리 실패', false); return; }
+            var d = r.data;
             notice(d.posts_updated + '개 글에서 엑박 블록 ' + d.blocks_removed + '개 제거 완료', true);
             if (d.posts_updated > 0) { loadBrokenImgPosts(false); }
+        })
+        .fail(function(xhr, status) {
+            hideProg($prog);
+            $btn.prop('disabled', false).text('🧹 엑박 블록 글에서 자동 제거');
+            notice(status === 'timeout' ? '요청 시간 초과 (330초)' : '서버 오류', false);
         });
     }
 
