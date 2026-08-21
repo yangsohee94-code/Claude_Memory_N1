@@ -5,11 +5,12 @@ class DIM_Ajax {
 
     public function init() {
         $actions = [
-            'scan', 'enrich', 'convert_webp', 'fix_thumbnails',
+            'scan', 'convert_webp', 'fix_thumbnails',
             'schedule', 'get_counts',
             'get_stats', 'get_no_thumb_posts', 'get_nonwebp', 'delete_images', 'scan_unused',
             'get_broken_img_posts', 'get_h2_no_img_posts', 'crop_image', 'auto_set_thumb',
             'get_upload_settings', 'save_upload_settings',
+            'scan_broken_attachments',
         ];
         foreach ( $actions as $a ) {
             add_action( "wp_ajax_dim_{$a}", [ $this, "handle_{$a}" ] );
@@ -23,45 +24,6 @@ class DIM_Ajax {
             absint( $_POST['batch']  ?? 100 ),
             absint( $_POST['offset'] ?? 0 )
         ) );
-    }
-
-    // scan_duplicates에 통합됨 — 하위 호환용 stub
-    public function handle_enrich() {
-        $this->auth();
-        wp_send_json_success( [ 'groups' => [] ] );
-    }
-
-    public function handle_merge() {
-        $this->auth();
-        $keep_id    = absint( $_POST['keep_id'] ?? 0 );
-        $delete_ids = array_map( 'absint', (array)( $_POST['delete_ids'] ?? [] ) );
-        if ( ! $keep_id || ! $delete_ids ) wp_send_json_error( [ 'message' => '잘못된 요청' ] );
-        wp_send_json_success( ( new DIM_Merger() )->merge( $keep_id, $delete_ids ) );
-    }
-
-    public function handle_auto_merge() {
-        $this->auth();
-        @set_time_limit( 120 );
-        @ini_set( 'memory_limit', '256M' );
-        $groups = $_POST['groups'] ?? [];
-        if ( empty( $groups ) ) wp_send_json_error( [ 'message' => '그룹 없음' ] );
-
-        $merger  = new DIM_Merger();
-        $merged  = 0;
-        $errors  = [];
-
-        foreach ( $groups as $group ) {
-            foreach ( $group['items'] as &$item ) {
-                $item['id']      = absint( $item['id'] );
-                // is_used는 스캔 시 이미 계산됨 — 재조회 불필요 (LIKE 쿼리 방지)
-                $item['is_used'] = (bool) ( $item['is_used'] ?? false );
-            }
-            $r       = $merger->auto_merge_group( $group );
-            $merged += $r['merged'];
-            $errors  = array_merge( $errors, $r['errors'] );
-        }
-
-        wp_send_json_success( [ 'merged' => $merged, 'errors' => $errors ] );
     }
 
     public function handle_convert_webp() {
@@ -338,6 +300,15 @@ class DIM_Ajax {
         imagedestroy( $dst );
 
         return $ok ? true : '파일 저장 실패';
+    }
+
+    public function handle_scan_broken_attachments() {
+        $this->auth();
+        @set_time_limit( 120 );
+        wp_send_json_success( ( new DIM_Stats() )->scan_broken_attachments(
+            absint( $_POST['batch']  ?? 100 ),
+            absint( $_POST['offset'] ?? 0 )
+        ) );
     }
 
     private function auth() {

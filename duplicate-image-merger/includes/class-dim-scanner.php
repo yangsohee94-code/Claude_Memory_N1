@@ -126,26 +126,6 @@ class DIM_Scanner {
         ];
     }
 
-    /**
-     * 특정 첨부파일 단건 사용 여부 확인 (병합/자동병합 시 사용)
-     */
-    public function is_image_in_use( $attachment_id ) {
-        global $wpdb;
-
-        $thumb_used = $this->get_thumbnail_ids();
-        if ( in_array( (int) $attachment_id, $thumb_used, true ) ) return true;
-
-        $url = wp_get_attachment_url( $attachment_id );
-        if ( ! $url ) return false;
-
-        return (bool) $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->posts}
-             WHERE post_status NOT IN ('trash','auto-draft')
-               AND post_content LIKE %s",
-            '%' . $wpdb->esc_like( $url ) . '%'
-        ) );
-    }
-
     private function get_thumbnail_ids(): array {
         if ( $this->thumbnail_ids !== null ) return $this->thumbnail_ids;
         global $wpdb;
@@ -157,11 +137,5 @@ class DIM_Scanner {
         return $this->thumbnail_ids;
     }
 
-    public function get_total_images() {
-        global $wpdb;
-        return (int) $wpdb->get_var(
-            "SELECT COUNT(*) FROM {$wpdb->posts}
-             WHERE post_type = 'attachment' AND post_mime_type LIKE 'image/%'"
-        );
-    }
+
 }

@@ -10,7 +10,7 @@ class DIM_Admin {
     }
 
     public function register_menu() {
-        add_media_page( '중복 이미지 병합 & 최적화', '중복 이미지 병합', 'manage_options',
+        add_media_page( '이미지 최적화 관리', '이미지 최적화', 'manage_options',
             'duplicate-image-merger', [ $this, 'render_page' ] );
     }
 
@@ -34,26 +34,13 @@ class DIM_Admin {
     }
 
     /**
-     * 통합 크론: 중복 병합 → WebP 변환 → 대표이미지 정합성 수정
+     * 자동 크론: WebP 변환 → 대표이미지 정합성 수정
      */
     public function run_cron() {
-        $scanner   = new DIM_Scanner();
-        $merger    = new DIM_Merger();
         $converter = new DIM_Converter();
         $thumbnail = new DIM_Thumbnail();
 
-        // 1. 중복 병합
-        $offset = 0;
-        while ( true ) {
-            $r = $scanner->scan_duplicates( 200, $offset );
-            foreach ( $r['duplicates'] as $group ) {
-                $merger->auto_merge_group( $group );
-            }
-            if ( ! $r['has_more'] ) break;
-            $offset += 200;
-        }
-
-        // 2. WebP 변환 — 변환 후 mime_type이 webp로 바뀌므로 항상 offset=0
+        // 1. WebP 변환 — 변환 후 mime_type이 webp로 바뀌므로 항상 offset=0
         if ( $converter->can_convert() ) {
             while ( true ) {
                 $r = $converter->convert_all( 50, 0 );
@@ -62,7 +49,7 @@ class DIM_Admin {
             }
         }
 
-        // 3. 대표이미지 정합성
+        // 2. 대표이미지 정합성
         $thumbnail->fix_all();
 
         update_option( 'dim_last_cron_run', current_time( 'mysql' ) );

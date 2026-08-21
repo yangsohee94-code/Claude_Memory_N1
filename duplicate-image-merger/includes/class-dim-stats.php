@@ -477,6 +477,56 @@ class DIM_Stats {
     }
 
     /**
+     * 미디어 라이브러리에서 파일이 없는 엑박 attachment 레코드 스캔
+     * 배치 단위로 호출 — has_more가 false가 될 때까지 반복
+     */
+    public function scan_broken_attachments( $batch = 100, $offset = 0 ) {
+        global $wpdb;
+
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT p.ID, p.post_title, p.post_date, p.guid,
+                    m.meta_value AS rel_path
+             FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->postmeta} m
+                   ON m.post_id = p.ID AND m.meta_key = '_wp_attached_file'
+             WHERE p.post_type = 'attachment'
+               AND p.post_mime_type LIKE 'image/%%'
+             ORDER BY p.ID ASC
+             LIMIT %d OFFSET %d",
+            $batch, $offset
+        ) );
+
+        if ( empty( $rows ) ) {
+            return [ 'items' => [], 'scanned' => 0, 'has_more' => false ];
+        }
+
+        $upload_base = wp_upload_dir()['basedir'];
+        $items = [];
+        foreach ( $rows as $row ) {
+            $abs = $row->rel_path
+                ? trailingslashit( $upload_base ) . $row->rel_path
+                : '';
+            if ( $abs && file_exists( $abs ) ) continue;
+
+            $name = $row->rel_path
+                ? basename( $row->rel_path )
+                : ( $row->guid ? basename( (string) parse_url( $row->guid, PHP_URL_PATH ) ) : '' );
+
+            $items[] = [
+                'id'   => (int) $row->ID,
+                'name' => $name ?: $row->post_title,
+                'date' => substr( $row->post_date, 0, 10 ),
+            ];
+        }
+
+        return [
+            'items'    => $items,
+            'scanned'  => count( $rows ),
+            'has_more' => count( $rows ) === $batch,
+        ];
+    }
+
+    /**
      * 여러 첨부파일 삭제
      */
     public function delete_attachments( array $ids ) {

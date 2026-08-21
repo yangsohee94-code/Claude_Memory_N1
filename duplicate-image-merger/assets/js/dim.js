@@ -43,18 +43,6 @@
         if (off) $('html,body').animate({ scrollTop: off.top - 40 }, 200);
     }
 
-    // ── 자동 병합 중단 재개 지원 (localStorage) ──
-    var DIM_PENDING_KEY = 'dim_pending_merge_' + (DIM.ajax_url || '').replace(/\W/g, '');
-    function savePendingGroups(arr) {
-        try { localStorage.setItem(DIM_PENDING_KEY, JSON.stringify(arr)); } catch(e) {}
-    }
-    function clearPendingGroups() {
-        try { localStorage.removeItem(DIM_PENDING_KEY); } catch(e) {}
-    }
-    function getPendingGroups() {
-        try { var v = localStorage.getItem(DIM_PENDING_KEY); return v ? JSON.parse(v) : null; } catch(e) { return null; }
-    }
-
     function post(action, data, cb) {
         $.ajax({
             url: DIM.ajax_url, type: 'POST', timeout: 90000,
@@ -144,7 +132,7 @@
         var $res = $('#dim-results').empty();
         var gt = $('#dim-group-tmpl').html(), it = $('#dim-item-tmpl').html();
 
-        groups.forEach(function(g, idx){
+        groups.forEach(function(g){
             var items = g.items.map(function(item){
                 return it
                     .replace(/\{\{id\}\}/g,        item.id)
@@ -152,25 +140,16 @@
                     .replace(/\{\{title\}\}/g,      esc(item.title))
                     .replace(/\{\{date\}\}/g,        item.date||'')
                     .replace(/\{\{size\}\}/g,        fmt(item.file_size))
-                    .replace(/\{\{group_idx\}\}/g,   idx)
                     .replace(/\{\{used_class\}\}/g,  item.is_used ? 'dim-used' : '')
                     .replace(/\{\{used_badge\}\}/g,  item.is_used ? '<span class="dim-badge-used">사용 중</span>' : '');
             }).join('');
 
             $res.append(gt
-                .replace(/\{\{idx\}\}/g,        idx)
                 .replace(/\{\{count\}\}/g,       g.count)
                 .replace(/\{\{hash_short\}\}/g,  (g.hash||'').slice(0,10)+'…')
                 .replace(/\{\{items\}\}/g,       items)
             );
         });
-        $('#dim-select-all-wrap').show();
-        updateDupCount();
-    }
-
-    function updateDupCount() {
-        var n = $('.dim-item-checkbox:checked').length;
-        $('#dim-selected-count').text(n+'개 선택됨');
     }
 
     function fixThumbnails() {
@@ -529,7 +508,78 @@
     }
 
     // ═══════════════════════════════════
-    // ⑥ 이미지 오류 글
+    // ⑥ 엑박 이미지 (파일 없는 attachment)
+    // ═══════════════════════════════════
+    var $progBrokenAtt = null;
+    var brokenAttItems = [];
+
+    function scanBrokenAtts() {
+        $progBrokenAtt = $('#dim-progress-brokenatt');
+        brokenAttItems = [];
+        $('#dim-brokenatt-list').empty();
+        $('#dim-brokenatt-summary, #dim-brokenatt-select-wrap').hide();
+        $('#dim-delete-brokenatt-btn, #dim-delete-all-brokenatt-btn').prop('disabled', true);
+
+        var scanned = 0;
+        prog($progBrokenAtt, 0, totalImages || 0, '스캔 중');
+
+        function doBatch(offset) {
+            post('scan_broken_attachments', { batch: 100, offset: offset }, function(err, d) {
+                if (err) { progDone($progBrokenAtt, '오류: ' + (err.message||''), false); return; }
+                brokenAttItems = brokenAttItems.concat(d.items || []);
+                scanned += d.scanned || 0;
+                prog($progBrokenAtt, scanned, totalImages || scanned + (d.has_more ? 100 : 0), '스캔 중');
+                if (d.has_more) { doBatch(offset + 100); return; }
+
+                hideProg($progBrokenAtt);
+                $('#dim-brokenatt-scanned').text(scanned);
+                $('#dim-brokenatt-count').text(brokenAttItems.length);
+                $('#dim-brokenatt-summary').show();
+
+                if (!brokenAttItems.length) {
+                    $('#dim-brokenatt-list').html('<p style="padding:16px">엑박 이미지가 없습니다 ✅</p>');
+                    return;
+                }
+
+                var tmpl = $('#dim-broken-att-item-tmpl').html();
+                brokenAttItems.forEach(function(item) {
+                    $('#dim-brokenatt-list').append(tmpl
+                        .replace(/\{\{id\}\}/g,   item.id)
+                        .replace(/\{\{name\}\}/g,  esc(item.name || ('ID ' + item.id)))
+                        .replace(/\{\{date\}\}/g,  item.date || '')
+                    );
+                });
+
+                $('#dim-brokenatt-select-wrap').show();
+                $('#dim-delete-all-brokenatt-btn').prop('disabled', false);
+                updateBrokenAttCount();
+            });
+        }
+        doBatch(0);
+    }
+
+    function updateBrokenAttCount() {
+        var n = $('.dim-ba-checkbox:checked').length;
+        $('#dim-brokenatt-selected-count').text(n + '개 선택됨');
+        $('#dim-delete-brokenatt-btn').prop('disabled', n === 0);
+    }
+
+    function deleteBrokenAtts(ids) {
+        if (!ids.length) return;
+        if (!confirm(ids.length + '개 항목을 미디어 라이브러리에서 삭제합니다. 복구 불가합니다.')) return;
+        prog($progBrokenAtt || $('#dim-progress-brokenatt'), 0, 0, '삭제 중');
+        post('delete_images', { ids: ids }, function(err, d) {
+            hideProg($progBrokenAtt || $('#dim-progress-brokenatt'));
+            if (err) { notice(err.message, false); return; }
+            var msg = d.deleted + '개 삭제 완료';
+            if (d.errors && d.errors.length) msg += ' · 실패 ' + d.errors.length + '개';
+            notice(msg, !d.errors || !d.errors.length);
+            scanBrokenAtts();
+        });
+    }
+
+    // ═══════════════════════════════════
+    // ⑦ 이미지 오류 글
     // ═══════════════════════════════════
     var $progBroken     = null;
     var brokenOffset    = 0;
@@ -833,21 +883,10 @@
     $(function(){
         initSchedule();
 
-        // 이전 중단된 병합 pending 데이터 정리 (기능 제거됨)
-        clearPendingGroups();
-
         // 탭 ①
         $('#dim-scan-btn').on('click', startScan);
         $('#dim-thumb-btn').on('click', fixThumbnails);
         $('#dim-run-now-btn').on('click', runAll);
-        $('#dim-select-all').on('change', function(){
-            $('.dim-item-checkbox').prop('checked', this.checked); updateDupCount();
-        });
-        $(document).on('change', '.dim-group-select-all', function(){
-            var g = $(this).data('group-idx');
-            $('.dim-item-checkbox[data-group-idx="'+g+'"]').prop('checked', this.checked); updateDupCount();
-        });
-        $(document).on('change', '.dim-item-checkbox', updateDupCount);
 
         // 탭 ②
         $('#dim-load-nonwebp-btn').on('click', function(){ loadNonWebp(false); });
@@ -893,7 +932,22 @@
         });
         $(document).on('change', '.dim-unused-checkbox', updateUnusedCount);
 
-        // 탭 ⑥ 이미지 오류 글
+        // 탭 ⑥ 엑박 이미지
+        $('#dim-scan-brokenatt-btn').on('click', scanBrokenAtts);
+        $('#dim-delete-brokenatt-btn').on('click', function(){
+            var ids = $('.dim-ba-checkbox:checked').map(function(){ return this.value; }).get();
+            deleteBrokenAtts(ids);
+        });
+        $('#dim-delete-all-brokenatt-btn').on('click', function(){
+            var ids = brokenAttItems.map(function(i){ return i.id; });
+            deleteBrokenAtts(ids);
+        });
+        $('#dim-brokenatt-select-all').on('change', function(){
+            $('.dim-ba-checkbox').prop('checked', this.checked); updateBrokenAttCount();
+        });
+        $(document).on('change', '.dim-ba-checkbox', updateBrokenAttCount);
+
+        // 탭 ⑦ 이미지 오류 글
         $('#dim-scan-brokenimg-btn').on('click', function(){ loadBrokenImgPosts(false); });
         $('#dim-brokenimg-more-btn').on('click', function(){ loadBrokenImgPosts(true); });
         $('#dim-brokenimg-sort-btn').on('click', function(){
@@ -902,11 +956,11 @@
             renderBrokenList();
         });
 
-        // 탭 ⑦ H2 아래 이미지 없는 글
+        // 탭 ⑧ H2 아래 이미지 없는 글
         $('#dim-scan-h2noimg-btn').on('click', function(){ loadH2NoImgPosts(false); });
         $('#dim-h2noimg-more-btn').on('click', function(){ loadH2NoImgPosts(true); });
 
-        // 탭 ⑧ 업로드 설정
+        // 탭 ⑨ 업로드 설정
         function updateUploadPreview() {
             var enabled = $('#dim-upload-rename-toggle').is(':checked');
             var prefix  = $.trim($('#dim-upload-prefix').val()) || 'image';

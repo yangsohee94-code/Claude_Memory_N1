@@ -9,6 +9,7 @@
         <button class="dim-tab" data-tab="nothumb">대표이미지 없는 글</button>
         <button class="dim-tab" data-tab="stats">용량 현황</button>
         <button class="dim-tab" data-tab="unused">미사용 이미지</button>
+        <button class="dim-tab" data-tab="brokenatt">엑박 이미지</button>
         <button class="dim-tab" data-tab="brokenimg">이미지 오류 글</button>
         <button class="dim-tab" data-tab="h2noimg">H2 이미지 누락</button>
         <button class="dim-tab" data-tab="upload">업로드 설정</button>
@@ -46,11 +47,6 @@
             <span>스캔 <strong id="dim-total-scanned">0</strong>개</span>
             <span>중복 그룹 <strong id="dim-group-count">0</strong>개</span>
             <span>절약 가능 <strong id="dim-saved-size">0</strong></span>
-        </div>
-
-        <div id="dim-select-all-wrap" style="display:none;" class="dim-select-all-wrap">
-            <label><input type="checkbox" id="dim-select-all"> 전체 선택 / 해제</label>
-            <span id="dim-selected-count" class="dim-muted">0개 선택됨</span>
         </div>
 
         <div id="dim-results"></div>
@@ -191,7 +187,38 @@
         </div>
     </div>
 
-    <!-- ⑥ 이미지 오류 글 탭 -->
+    <!-- ⑥ 엑박 이미지 탭 -->
+    <div class="dim-tab-content" id="dim-tab-brokenatt">
+        <div class="dim-panel-desc" style="padding:12px 0 0;">
+            <strong>엑박 이미지</strong> — 미디어 라이브러리에 등록은 되어 있지만 실제 파일이 서버에 없는 이미지입니다.<br>
+            <span class="dim-muted">※ 삭제해도 글 본문에 이미 삽입된 내용은 유지되지만, 미디어 라이브러리에서 제거됩니다.</span>
+        </div>
+        <div class="dim-action-bar" style="margin-top:8px;">
+            <button id="dim-scan-brokenatt-btn" class="button button-primary">🔍 엑박 이미지 스캔</button>
+            <span class="dim-spacer"></span>
+            <button id="dim-delete-brokenatt-btn" class="button dim-btn-danger" disabled>🗑 선택 항목 삭제</button>
+            <button id="dim-delete-all-brokenatt-btn" class="button dim-btn-danger" disabled>🗑 전체 삭제</button>
+        </div>
+
+        <div id="dim-progress-brokenatt" class="dim-progress-wrap" style="display:none;">
+            <div class="dim-progress-inner"><div class="dim-progress-bar"></div></div>
+            <span class="dim-progress-text"></span>
+        </div>
+
+        <div id="dim-brokenatt-summary" style="display:none;" class="dim-summary">
+            <span>스캔 <strong id="dim-brokenatt-scanned">0</strong>개</span>
+            <span>엑박 이미지 <strong id="dim-brokenatt-count">0</strong>개</span>
+        </div>
+
+        <div id="dim-brokenatt-select-wrap" style="display:none;" class="dim-select-all-wrap">
+            <label><input type="checkbox" id="dim-brokenatt-select-all"> 전체 선택 / 해제</label>
+            <span id="dim-brokenatt-selected-count" class="dim-muted">0개 선택됨</span>
+        </div>
+
+        <div id="dim-brokenatt-list"></div>
+    </div>
+
+    <!-- ⑧ 이미지 오류 글 탭 -->
     <div class="dim-tab-content" id="dim-tab-brokenimg">
         <div class="dim-panel-desc" style="padding:12px 0 0;">
             <strong>이미지 오류 글</strong> — 본문에 삽입된 이미지가 실제로 존재하지 않는 글입니다 (파일 삭제·미디어 라이브러리에서 제거된 경우).<br>
@@ -218,7 +245,7 @@
         </div>
     </div>
 
-    <!-- ⑦ H2 아래 이미지 없는 글 탭 -->
+    <!-- ⑨ H2 아래 이미지 없는 글 탭 -->
     <div class="dim-tab-content" id="dim-tab-h2noimg">
         <div class="dim-panel-desc" style="padding:12px 0 0;">
             <strong>H2 이미지 누락</strong> — H2 제목 바로 다음에 이미지가 없는 글입니다.<br>
@@ -244,7 +271,7 @@
         </div>
     </div>
 
-    <!-- ⑧ 업로드 설정 탭 -->
+    <!-- ⑩ 업로드 설정 탭 -->
     <div class="dim-tab-content" id="dim-tab-upload">
 
         <div class="dim-panel">
@@ -322,19 +349,16 @@
 
 <!-- 그룹 템플릿 -->
 <script type="text/html" id="dim-group-tmpl">
-<div class="dim-group" data-group-idx="{{idx}}">
+<div class="dim-group">
     <div class="dim-group-header">
-        <label><input type="checkbox" class="dim-group-select-all" data-group-idx="{{idx}}"> 그룹 전체 선택</label>
-        <span class="dim-muted">{{count}}개 · {{hash_short}}</span>
+        <span class="dim-muted">{{count}}개 중복 · {{hash_short}}</span>
     </div>
     <div class="dim-group-items">{{items}}</div>
-    <div class="dim-group-footer"></div>
 </div>
 </script>
 
 <script type="text/html" id="dim-item-tmpl">
 <div class="dim-item {{used_class}}" data-id="{{id}}">
-    <input type="checkbox" class="dim-item-checkbox" value="{{id}}" data-group-idx="{{group_idx}}">
     <img src="{{url}}" alt="" loading="lazy">
     <div class="dim-item-info">
         <strong>{{title}}</strong>
@@ -342,10 +366,17 @@
         <span class="dim-muted">ID: {{id}}</span>
         {{used_badge}}
     </div>
-    <label class="dim-keep-label">
-        <input type="radio" name="dim-keep-{{group_idx}}" value="{{id}}" class="dim-keep-radio">
-        원본 유지
-    </label>
+</div>
+</script>
+
+<script type="text/html" id="dim-broken-att-item-tmpl">
+<div class="dim-nw-item">
+    <input type="checkbox" class="dim-ba-checkbox" value="{{id}}">
+    <div class="dim-item-info">
+        <strong>{{name}}</strong>
+        <span class="dim-muted">ID: {{id}} · {{date}}</span>
+        <span class="dim-badge-unused">파일 없음</span>
+    </div>
 </div>
 </script>
 
