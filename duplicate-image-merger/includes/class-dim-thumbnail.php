@@ -27,10 +27,10 @@ class DIM_Thumbnail {
             $thumb_id = (int) $row->thumb_id;
 
             // 첨부파일이 정상적으로 존재하는지 확인
-            if ( $this->attachment_exists( $thumb_id ) ) continue;
+            if ( $this->attachment_file_exists( $thumb_id ) ) continue;
 
             // 같은 포스트에 연결된 다른 이미지로 대체 시도
-            $alt = $this->find_attached_image( $post_id );
+            $alt = $this->find_first_valid_image( $post_id );
             if ( $alt ) {
                 update_post_meta( $post_id, '_thumbnail_id', $alt );
                 $fixed++;
@@ -54,7 +54,7 @@ class DIM_Thumbnail {
         $thumb_id = (int) get_post_thumbnail_id( $post_id );
         if ( ! $thumb_id ) return [ 'status' => 'none' ];
 
-        if ( $this->attachment_exists( $thumb_id ) ) {
+        if ( $this->attachment_file_exists( $thumb_id ) ) {
             return [
                 'status'  => 'ok',
                 'thumb_id' => $thumb_id,
@@ -65,16 +65,55 @@ class DIM_Thumbnail {
         return [ 'status' => 'broken', 'thumb_id' => $thumb_id ];
     }
 
-    private function attachment_exists( int $id ): bool {
-        return $id > 0 && get_post_type( $id ) === 'attachment';
+    /**
+     * 대표이미지 없는 글에 첫 번째 유효 이미지를 자동 설정
+     *
+     * @param int $post_id
+     * @return array { set: bool, attachment_id: int }
+     */
+    public function auto_set_from_content( int $post_id ) {
+        $att_id = $this->find_first_valid_image( $post_id );
+        if ( ! $att_id ) {
+            return [ 'set' => false, 'attachment_id' => 0 ];
+        }
+        update_post_meta( $post_id, '_thumbnail_id', $att_id );
+        return [ 'set' => true, 'attachment_id' => $att_id ];
     }
 
-    private function find_attached_image( int $post_id ): int {
-        $images = get_attached_media( 'image', $post_id );
-        if ( $images ) {
-            reset( $images );
-            return (int) key( $images );
+    /**
+     * 포스트에서 첫 번째 유효한(파일이 실제 존재하는) 이미지 ID 반환
+     * 우선순위: ① post_content Gutenberg 블록 "id":N ② post_parent 첨부파일
+     */
+    public function find_first_valid_image( int $post_id ): int {
+        // ① Gutenberg 블록 "id":N 순서대로 검사
+        $content = get_post_field( 'post_content', $post_id );
+        if ( $content ) {
+            preg_match_all( '/"id"\s*:\s*(\d+)/', $content, $m );
+            foreach ( $m[1] as $raw_id ) {
+                $id = (int) $raw_id;
+                if ( $this->attachment_file_exists( $id ) ) {
+                    return $id;
+                }
+            }
         }
+
+        // ② post_parent로 첨부된 이미지 순서대로 검사
+        $images = get_attached_media( 'image', $post_id );
+        foreach ( $images as $att_id => $att ) {
+            if ( $this->attachment_file_exists( (int) $att_id ) ) {
+                return (int) $att_id;
+            }
+        }
+
         return 0;
+    }
+
+    /**
+     * 첨부파일이 DB에 존재하고 실제 파일도 디스크에 있는지 확인
+     */
+    private function attachment_file_exists( int $id ): bool {
+        if ( $id <= 0 || get_post_type( $id ) !== 'attachment' ) return false;
+        $file = get_attached_file( $id );
+        return $file && file_exists( $file );
     }
 }

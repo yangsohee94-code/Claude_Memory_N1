@@ -329,11 +329,13 @@
 </script>
 
 <script type="text/html" id="dim-nothumb-item-tmpl">
-<div class="dim-nt-item">
+<div class="dim-nt-item" data-post-id="{{post_id}}">
     <span class="dim-nt-num">{{num}}</span>
     <span class="dim-nt-type">{{type}}</span>
     <a href="{{edit_url}}" target="_blank"><strong>{{title}}</strong></a>
     <span class="dim-muted">{{date}}</span>
+    <button class="button button-small dim-auto-thumb-btn" data-post-id="{{post_id}}" style="margin-left:auto;">🖼 썸네일 설정</button>
+    <span class="dim-auto-thumb-result" style="font-size:11px;"></span>
 </div>
 </script>
 

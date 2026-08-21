@@ -530,6 +530,7 @@
                 var editUrl = adminUrl+'post.php?post='+item.ID+'&action=edit';
                 $('#dim-nothumb-list').append(tmpl
                     .replace(/\{\{num\}\}/g,       prevNt + i + 1)
+                    .replace(/\{\{post_id\}\}/g,    item.ID)
                     .replace(/\{\{title\}\}/g,     esc(item.post_title || '(제목 없음)'))
                     .replace(/\{\{type\}\}/g,       item.post_type === 'page' ? '페이지' : '글')
                     .replace(/\{\{date\}\}/g,       (item.post_date||'').slice(0,10))
@@ -1019,6 +1020,21 @@
         // 탭 ③
         $('#dim-load-nothumb-btn').on('click', function(){ loadNoThumb(false); });
         $('#dim-nothumb-more-btn').on('click', function(){ loadNoThumb(true); });
+        $(document).on('click', '.dim-auto-thumb-btn', function(){
+            var $btn    = $(this);
+            var postId  = $btn.data('post-id');
+            var $result = $btn.siblings('.dim-auto-thumb-result');
+            $btn.prop('disabled', true).text('설정 중...');
+            post('auto_set_thumb', { post_id: postId }, function(err, d){
+                if (err) {
+                    $result.css('color','#d63638').text('이미지 없음');
+                } else {
+                    $result.css('color','#00a32a').text('✔ 완료');
+                    $btn.closest('.dim-nt-item').fadeOut(600, function(){ $(this).remove(); });
+                }
+                $btn.prop('disabled', false).text('🖼 썸네일 설정');
+            });
+        });
 
         // 탭 ④
         $('#dim-load-stats-btn').on('click', loadStats);

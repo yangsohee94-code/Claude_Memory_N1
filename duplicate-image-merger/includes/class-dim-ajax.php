@@ -8,7 +8,7 @@ class DIM_Ajax {
             'scan', 'enrich', 'merge', 'auto_merge', 'convert_webp', 'fix_thumbnails',
             'schedule', 'get_counts',
             'get_stats', 'get_no_thumb_posts', 'get_nonwebp', 'delete_images', 'scan_unused',
-            'get_broken_img_posts', 'get_h2_no_img_posts', 'crop_image',
+            'get_broken_img_posts', 'get_h2_no_img_posts', 'crop_image', 'auto_set_thumb',
         ];
         foreach ( $actions as $a ) {
             add_action( "wp_ajax_dim_{$a}", [ $this, "handle_{$a}" ] );
@@ -105,6 +105,19 @@ class DIM_Ajax {
     public function handle_fix_thumbnails() {
         $this->auth();
         wp_send_json_success( ( new DIM_Thumbnail() )->fix_all() );
+    }
+
+    public function handle_auto_set_thumb() {
+        $this->auth();
+        $post_id = absint( $_POST['post_id'] ?? 0 );
+        if ( ! $post_id ) wp_send_json_error( [ 'message' => '잘못된 post_id' ] );
+        $result = ( new DIM_Thumbnail() )->auto_set_from_content( $post_id );
+        if ( $result['set'] ) {
+            $url = wp_get_attachment_image_url( $result['attachment_id'], 'thumbnail' );
+            wp_send_json_success( [ 'attachment_id' => $result['attachment_id'], 'url' => $url ] );
+        } else {
+            wp_send_json_error( [ 'message' => '설정할 유효한 이미지를 찾지 못했습니다.' ] );
+        }
     }
 
     public function handle_schedule() {
