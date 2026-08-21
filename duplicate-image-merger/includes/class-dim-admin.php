@@ -4,9 +4,11 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class DIM_Admin {
 
     public function init() {
-        add_action( 'admin_menu',            [ $this, 'register_menu' ] );
-        add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
-        add_action( 'dim_optimize_cron',     [ $this, 'run_cron' ] );
+        add_action( 'admin_menu',                [ $this, 'register_menu' ] );
+        add_action( 'admin_enqueue_scripts',     [ $this, 'enqueue_assets' ] );
+        add_action( 'enqueue_block_editor_assets', [ $this, 'enqueue_editor_assets' ] );
+        add_action( 'admin_head',                [ $this, 'media_library_styles' ] );
+        add_action( 'dim_optimize_cron',         [ $this, 'run_cron' ] );
     }
 
     public function register_menu() {
@@ -34,6 +36,47 @@ class DIM_Admin {
             'cron_on'   => (bool) wp_next_scheduled( 'dim_optimize_cron' ),
             'last_run'  => get_option( 'dim_last_cron_run', '' ),
         ] );
+    }
+
+    public function enqueue_editor_assets() {
+        wp_enqueue_script(
+            'dim-editor',
+            DIM_PLUGIN_URL . 'assets/js/dim-editor.js',
+            [ 'wp-plugins', 'wp-edit-post', 'wp-editor', 'wp-element', 'wp-components', 'wp-data', 'jquery' ],
+            DIM_VERSION,
+            true
+        );
+        wp_localize_script( 'dim-editor', 'DIM_EDITOR', [
+            'ajax_url' => admin_url( 'admin-ajax.php' ),
+            'nonce'    => wp_create_nonce( 'dim_nonce' ),
+        ] );
+    }
+
+    public function media_library_styles() {
+        global $pagenow;
+        if ( $pagenow !== 'upload.php' ) return;
+        ?>
+        <style id="dim-media-styles">
+        /* DIM: 미디어 라이브러리 썸네일 크게 (약 4개씩) */
+        .media-frame-content .attachments-browser .attachments .attachment {
+            width: 230px !important;
+        }
+        .media-frame-content .attachments-browser .attachments .attachment .thumbnail {
+            width: 230px !important;
+            height: 210px !important;
+        }
+        .media-frame-content .attachments-browser .attachments .attachment .thumbnail img {
+            max-width: 100% !important;
+            max-height: 210px !important;
+            width: auto !important;
+            height: auto !important;
+        }
+        .media-frame-content .attachments-browser .attachments .attachment:focus::after,
+        .media-frame-content .attachments-browser .attachments .attachment.selected::after {
+            box-shadow: inset 0 0 0 3px #007cba, inset 0 0 0 7px #fff;
+        }
+        </style>
+        <?php
     }
 
     public function render_page() {
