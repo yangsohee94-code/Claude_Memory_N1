@@ -69,9 +69,11 @@
     // ── 브라우저 Canvas 자르기 모달 ──────────────────────────────
     function openCropModal( imgUrl, origId, clientId, origAlt ) {
         if ( ! imgUrl ) { alert( '이미지 URL이 없습니다.' ); return; }
+        if ( document.getElementById( 'qii-crop-overlay' ) ) return; // 중복 방지
 
         // ─ 오버레이 ─
         var overlay = document.createElement( 'div' );
+        overlay.id = 'qii-crop-overlay';
         overlay.style.cssText = [
             'position:fixed;top:0;left:0;right:0;bottom:0',
             'background:rgba(0,0,0,0.88)',
@@ -148,12 +150,13 @@
             }
         }
 
-        // ─ 마우스 이벤트 ─
+        // ─ 마우스/터치 이벤트 ─
         function getPos( e ) {
             var rect = canvas.getBoundingClientRect();
+            var src  = ( e.touches && e.touches.length ) ? e.touches[ 0 ] : e;
             return {
-                x: ( e.clientX || e.touches[ 0 ].clientX ) - rect.left,
-                y: ( e.clientY || e.touches[ 0 ].clientY ) - rect.top,
+                x: src.clientX - rect.left,
+                y: src.clientY - rect.top,
             };
         }
 
@@ -181,10 +184,17 @@
         canvas.addEventListener( 'touchmove',  onMove,  { passive: false } );
         canvas.addEventListener( 'touchend',   onEnd   );
 
-        // ─ 취소 ─
-        cancelBtn.addEventListener( 'click', function () {
+        // ─ 닫기 공통 함수 (ESC 포함) ─
+        function closeOverlay() {
             document.body.removeChild( overlay );
-        } );
+            document.removeEventListener( 'keydown', onKeyDown );
+        }
+        function onKeyDown( e ) {
+            if ( e.key === 'Escape' ) closeOverlay();
+        }
+        document.addEventListener( 'keydown', onKeyDown );
+
+        cancelBtn.addEventListener( 'click', closeOverlay );
 
         // ─ 적용 ─
         applyBtn.addEventListener( 'click', function () {
@@ -217,7 +227,12 @@
             cancelBtn.disabled    = true;
             statusEl.textContent  = '잘린 이미지를 업로드하는 중입니다…';
 
-            outCanvas.toBlob( function ( blob ) {
+            try { outCanvas.toBlob( function ( blob ) {
+                if ( ! blob ) {
+                    statusEl.textContent = '이미지 처리 실패 (CORS 문제일 수 있습니다).';
+                    applyBtn.textContent = '적용'; applyBtn.disabled = false; cancelBtn.disabled = false;
+                    return;
+                }
                 var origName  = imgUrl.split( '/' ).pop().split( '?' )[ 0 ];
                 var base      = origName.replace( /\.[^.]+$/, '' );
                 var newName   = base + '-cropped.jpg';
@@ -249,7 +264,7 @@
                         } );
                     }
 
-                    document.body.removeChild( overlay );
+                    closeOverlay();
                 } )
                 .catch( function ( err ) {
                     console.error( '[QII] 업로드 실패', err );
@@ -258,7 +273,10 @@
                     applyBtn.disabled    = false;
                     cancelBtn.disabled   = false;
                 } );
-            }, 'image/jpeg', 0.92 );
+            }, 'image/jpeg', 0.92 ); } catch ( secErr ) {
+                statusEl.textContent = '이미지 처리 실패: ' + secErr.message;
+                applyBtn.textContent = '적용'; applyBtn.disabled = false; cancelBtn.disabled = false;
+            }
         } );
 
         // ─ 이미지 로드 ─
@@ -275,7 +293,7 @@
         };
 
         img.onerror = function () {
-            document.body.removeChild( overlay );
+            closeOverlay();
             alert( '이미지를 불러올 수 없습니다.' );
         };
 
