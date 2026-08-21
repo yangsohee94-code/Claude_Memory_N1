@@ -129,6 +129,7 @@
         }
 
         function draw() {
+            if ( ! img.complete || ! img.naturalWidth ) return;
             ctx.clearRect( 0, 0, canvas.width, canvas.height );
             ctx.drawImage( img, 0, 0, canvas.width, canvas.height );
 
@@ -167,13 +168,17 @@
             cropRect = { x: startX, y: startY, w: 0, h: 0 };
             dragging = true;
         }
+        var rafPending = false;
         function onMove( e ) {
             e.preventDefault();
             if ( ! dragging ) return;
             var p = getPos( e );
             cropRect.w = p.x - startX;
             cropRect.h = p.y - startY;
-            draw();
+            if ( ! rafPending ) {
+                rafPending = true;
+                requestAnimationFrame( function () { draw(); rafPending = false; } );
+            }
         }
         function onEnd() { dragging = false; }
 
@@ -186,7 +191,7 @@
 
         // ─ 닫기 공통 함수 (ESC 포함) ─
         function closeOverlay() {
-            document.body.removeChild( overlay );
+            if ( overlay.parentNode ) overlay.parentNode.removeChild( overlay );
             document.removeEventListener( 'keydown', onKeyDown );
         }
         function onKeyDown( e ) {
@@ -362,21 +367,36 @@
                 document.querySelectorAll(
                     'button[aria-label="' + label + '"], button[aria-label^="' + label + ' "]'
                 ).forEach( function ( btn ) {
-                    btn.style.cssText += ';display:none!important';
+                    if ( btn.dataset.qiiHidden ) return; // 이미 처리한 버튼은 건너뜀
+                    btn.style.setProperty( 'display', 'none', 'important' );
+                    btn.dataset.qiiHidden = '1';
                     var g = btn.closest( '.components-toolbar-group' );
-                    if ( g ) {
+                    if ( g && ! g.dataset.qiiHidden ) {
                         var vis = Array.from( g.querySelectorAll( 'button' ) ).filter(
-                            function ( b ) { return getComputedStyle( b ).display !== 'none'; }
+                            function ( b ) { return ! b.dataset.qiiHidden; }
                         );
-                        if ( ! vis.length ) g.style.cssText += ';display:none!important';
+                        if ( ! vis.length ) {
+                            g.style.setProperty( 'display', 'none', 'important' );
+                            g.dataset.qiiHidden = '1';
+                        }
                     }
                 } );
             } );
             document.querySelectorAll(
                 '[class*="rank-math"][class*="ai"],[class*="rank-math"][class*="toolbar"]'
-            ).forEach( function ( n ) { n.style.cssText += ';display:none!important'; } );
+            ).forEach( function ( n ) {
+                if ( ! n.dataset.qiiHidden ) {
+                    n.style.setProperty( 'display', 'none', 'important' );
+                    n.dataset.qiiHidden = '1';
+                }
+            } );
         }
-        new MutationObserver( hide ).observe( document.body, { childList: true, subtree: true } );
+
+        var hideTimer = null;
+        new MutationObserver( function () {
+            clearTimeout( hideTimer );
+            hideTimer = setTimeout( hide, 150 );
+        } ).observe( document.body, { childList: true, subtree: true } );
         hide();
     } );
 } )();
