@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""네이버 블로그 자동 발행 모듈 — Playwright 기반"""
-import os, re, json, time, html as html_lib
+"""네이버 블로그 자동 발행 모듈 — Playwright 기반 (봇 감지 최소화)"""
+import os, re, json, time, random, html as html_lib
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 import anthropic
 from dotenv import load_dotenv
@@ -28,6 +28,7 @@ def _get_account_for_category(wp_category: str) -> dict | None:
         "blog_category": parts[2].strip() if len(parts) > 2 else "",
         "cookies":       os.getenv(f"NAVER_COOKIES_{key}", ""),
     }
+
 
 # ── 네이버용 콘텐츠 변환 지침 ─────────────────────────────────────────────
 
@@ -67,7 +68,6 @@ NAVER_TAGS: [태그1,태그2,태그3,태그4,태그5,태그6,태그7]
 
 def convert_wp_to_naver(title: str, wp_html: str, category: str = "") -> dict:
     """워드프레스 HTML 본문 → 네이버 블로그 최적화 텍스트 변환"""
-    # HTML 태그 제거 후 평문 추출
     plain = re.sub(r'<[^>]+>', ' ', wp_html)
     plain = html_lib.unescape(plain)
     plain = re.sub(r'[ \t]+', ' ', plain)
@@ -102,14 +102,96 @@ def convert_wp_to_naver(title: str, wp_html: str, category: str = "") -> dict:
     return result
 
 
+# ── 사람처럼 보이는 유틸 ──────────────────────────────────────────────────────
+
+def _pause(min_s: float = 0.8, max_s: float = 2.0):
+    """랜덤 대기 — 기계적 고정 딜레이 방지"""
+    time.sleep(random.uniform(min_s, max_s))
+
+
+def _human_move_and_click(page, selector: str):
+    """마우스를 자연스럽게 이동 후 클릭"""
+    el = page.wait_for_selector(selector, timeout=8000)
+    if not el:
+        return
+    box = el.bounding_box()
+    if not box:
+        el.click()
+        return
+    # 요소 중심에서 약간 벗어난 랜덤 위치 클릭 (사람은 정확히 중앙을 누르지 않음)
+    x = box["x"] + box["width"] * random.uniform(0.3, 0.7)
+    y = box["y"] + box["height"] * random.uniform(0.3, 0.7)
+    # 현재 위치에서 목표 위치까지 자연스럽게 이동
+    page.mouse.move(x + random.randint(-50, 50), y + random.randint(-30, 30))
+    _pause(0.2, 0.5)
+    page.mouse.move(x, y)
+    _pause(0.1, 0.3)
+    page.mouse.click(x, y)
+
+
+def _human_type(page, text: str):
+    """사람처럼 불규칙한 속도로 타이핑"""
+    for ch in text:
+        page.keyboard.type(ch)
+        # 글자마다 다른 딜레이 (80~200ms), 가끔 긴 정지 (문장 끝에서 생각하듯)
+        if ch in '.!?。\n':
+            time.sleep(random.uniform(0.3, 0.8))
+        elif ch == ' ':
+            time.sleep(random.uniform(0.05, 0.15))
+        else:
+            time.sleep(random.uniform(0.08, 0.20))
+
+
+def _scroll_naturally(page):
+    """페이지를 자연스럽게 스크롤 (읽는 척)"""
+    for _ in range(random.randint(2, 4)):
+        page.mouse.wheel(0, random.randint(200, 500))
+        _pause(0.4, 1.0)
+    # 다시 위로
+    page.keyboard.press("Control+Home")
+    _pause(0.5, 1.2)
+
+
+# ── webdriver 감지 차단 스크립트 ──────────────────────────────────────────────
+
+_STEALTH_JS = """
+() => {
+    // navigator.webdriver 숨기기
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+    // Chrome 자동화 플래그 제거
+    delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
+    delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
+    delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+
+    // plugins 가짜 주입 (빈 plugins = headless 감지)
+    Object.defineProperty(navigator, 'plugins', {
+        get: () => [1, 2, 3, 4, 5],
+    });
+
+    // languages 설정
+    Object.defineProperty(navigator, 'languages', {
+        get: () => ['ko-KR', 'ko', 'en-US', 'en'],
+    });
+
+    // permissions query 오버라이드
+    const originalQuery = window.navigator.permissions.query;
+    window.navigator.permissions.query = (parameters) =>
+        parameters.name === 'notifications'
+            ? Promise.resolve({ state: Notification.permission })
+            : originalQuery(parameters);
+}
+"""
+
+
 # ── 로그인 ────────────────────────────────────────────────────────────────────
 
-def _load_cookies(context) -> bool:
+def _load_cookies(context, cookies_json: str) -> bool:
     """저장된 쿠키로 세션 복원"""
-    if not NAVER_COOKIES:
+    if not cookies_json:
         return False
     try:
-        cookies = json.loads(NAVER_COOKIES)
+        cookies = json.loads(cookies_json)
         context.add_cookies(cookies)
         print("   🍪 쿠키로 세션 복원")
         return True
@@ -118,43 +200,15 @@ def _load_cookies(context) -> bool:
         return False
 
 
-def _login_pw(page) -> bool:
-    """ID/PW 로그인 (쿠키 없을 때 fallback)"""
-    if not NAVER_ID or not NAVER_PW:
-        return False
-    try:
-        page.goto("https://nid.naver.com/nidlogin.login", timeout=30000)
-        page.wait_for_selector("#id", timeout=10000)
-        # 봇 감지 우회: 천천히 입력
-        page.focus("#id")
-        time.sleep(0.5)
-        for ch in NAVER_ID:
-            page.keyboard.type(ch, delay=60)
-        time.sleep(0.4)
-        page.focus("#pw")
-        for ch in NAVER_PW:
-            page.keyboard.type(ch, delay=60)
-        time.sleep(0.3)
-        page.click(".btn_login")
-        page.wait_for_timeout(4000)
-
-        if "nid.naver.com" not in page.url:
-            print("   ✅ 네이버 ID/PW 로그인 성공")
-            return True
-        print("   ⚠️ 로그인 실패 — CAPTCHA 또는 2단계 인증 필요. NAVER_COOKIES 설정 권장.")
-        return False
-    except Exception as e:
-        print(f"   ⚠️ 로그인 오류: {e}")
-        return False
-
-
 def _is_logged_in(page) -> bool:
-    """로그인 상태 확인"""
+    """네이버 홈에서 로그인 상태 확인"""
     try:
-        page.goto("https://www.naver.com", timeout=15000)
+        page.goto("https://www.naver.com", timeout=20000)
         page.wait_for_load_state("domcontentloaded", timeout=10000)
-        return page.query_selector(".MyView-module__gnb_my_namebox___ErbHh, .link_login") is None \
-               or page.query_selector(".gnb_my_namebox") is not None
+        _pause(1.0, 2.0)
+        # 로그인된 경우 닉네임 영역이 보임
+        logged = page.query_selector(".gnb_my_namebox, .MyView-module__gnb_my_name___nFkGX")
+        return logged is not None
     except Exception:
         return False
 
@@ -162,32 +216,48 @@ def _is_logged_in(page) -> bool:
 # ── Smart Editor 3 조작 ──────────────────────────────────────────────────────
 
 def _type_in_editor(page, content: str):
-    """Smart Editor 3.0 본문 영역에 텍스트 입력"""
-    # contenteditable 요소 중 제목 제외한 본문 영역 찾기
-    js_set = """(text) => {
+    """Smart Editor 3.0 본문에 텍스트 입력 — 사람처럼"""
+    # 본문 영역(제목 제외) contenteditable 요소 찾아 클릭
+    js_focus = """() => {
         const editables = Array.from(document.querySelectorAll('[contenteditable="true"]'));
-        // 제목 입력창 제외 (보통 첫 번째)
         const body = editables.find(el => {
             const rect = el.getBoundingClientRect();
-            return rect.height > 100 && rect.top > 150;
+            return rect.height > 80 && rect.top > 150;
         }) || editables[1];
         if (!body) return false;
+        body.click();
         body.focus();
-        // 기존 내용 지우기
-        document.execCommand('selectAll', false, null);
-        document.execCommand('delete', false, null);
-        // 텍스트 삽입
-        document.execCommand('insertText', false, text);
         return true;
     }"""
-    ok = page.evaluate(js_set, content)
-    if not ok:
-        # fallback: 클릭 후 직접 타이핑
+    ok = page.evaluate(js_focus)
+    _pause(0.5, 1.0)
+
+    if ok:
+        # 기존 내용 전체 선택 후 삭제
+        page.keyboard.press("Control+a")
+        _pause(0.2, 0.4)
+        page.keyboard.press("Delete")
+        _pause(0.3, 0.6)
+        # 단락별로 나눠서 입력 (한 번에 붙여넣으면 기계처럼 보임)
+        paragraphs = content.split('\n')
+        for i, para in enumerate(paragraphs):
+            if para.strip():
+                _human_type(page, para)
+            page.keyboard.press("Enter")
+            # 단락 사이 잠깐 멈춤 (생각하는 듯)
+            if i % 3 == 2:
+                _pause(0.8, 1.8)
+            else:
+                _pause(0.2, 0.5)
+    else:
+        # fallback: 에디터 중앙 클릭 후 타이핑
         page.mouse.click(640, 450)
-        time.sleep(0.5)
+        _pause(0.5, 1.0)
         page.keyboard.press("Control+a")
         page.keyboard.press("Delete")
-        page.keyboard.type(content, delay=2)
+        _human_type(page, content)
+
+    print(f"   ✅ 본문 입력 완료 ({len(content)}자)")
 
 
 def _input_tags(page, tags: list):
@@ -202,14 +272,16 @@ def _input_tags(page, tags: list):
     ]
     for sel in tag_sels:
         try:
-            inp = page.wait_for_selector(sel, timeout=3000)
+            inp = page.wait_for_selector(sel, timeout=4000)
             if inp:
                 for tag in tags[:7]:
-                    inp.click()
-                    inp.type(tag.strip(), delay=30)
+                    _human_move_and_click(page, sel)
+                    _pause(0.3, 0.6)
+                    _human_type(page, tag.strip())
+                    _pause(0.2, 0.4)
                     page.keyboard.press("Enter")
-                    time.sleep(0.3)
-                print(f"   🏷️ 태그 {len(tags[:7])}개 입력")
+                    _pause(0.4, 0.8)
+                print(f"   ✅ 태그 {len(tags[:7])}개 입력")
                 return
         except PWTimeout:
             continue
@@ -219,17 +291,14 @@ def _select_category(page, category_name: str):
     """카테고리 선택"""
     if not category_name:
         return
-    cat_sels = [
-        ".category_select",
-        "#category",
-        "select[name*='category']",
-    ]
+    cat_sels = [".category_select", "#category", "select[name*='category']"]
     for sel in cat_sels:
         try:
             el = page.wait_for_selector(sel, timeout=3000)
             if el:
+                _pause(0.3, 0.7)
                 page.select_option(sel, label=category_name)
-                print(f"   📂 카테고리: {category_name}")
+                print(f"   ✅ 카테고리: {category_name}")
                 return
         except (PWTimeout, Exception):
             continue
@@ -246,19 +315,21 @@ def _click_publish(page) -> bool:
     ]
     for sel in publish_sels:
         try:
-            btn = page.wait_for_selector(sel, timeout=5000)
+            btn = page.wait_for_selector(sel, timeout=6000)
             if btn and btn.is_visible():
-                btn.click()
-                page.wait_for_timeout(3000)
-                # 발행 확인 팝업 처리
+                _pause(1.0, 2.0)  # 발행 전 잠깐 멈춤 (사람은 확인함)
+                _human_move_and_click(page, sel)
+                _pause(2.0, 4.0)
+                # 확인 팝업 처리
                 try:
                     confirm = page.wait_for_selector(
                         "button:has-text('확인'), button:has-text('발행하기')",
-                        timeout=3000
+                        timeout=4000,
                     )
                     if confirm:
+                        _pause(0.5, 1.0)
                         confirm.click()
-                        page.wait_for_timeout(2000)
+                        _pause(2.0, 3.0)
                 except PWTimeout:
                     pass
                 return True
@@ -267,14 +338,13 @@ def _click_publish(page) -> bool:
     return False
 
 
-# ── 단일 계정 발행 (내부용) ──────────────────────────────────────────────────
+# ── 단일 계정 발행 ────────────────────────────────────────────────────────────
 
 def _post_one_account(account: dict, naver_title: str, naver_content: str, naver_tags: list) -> bool:
     """Playwright로 네이버 계정 1개에 발행"""
-    naver_id = account["id"]
-    naver_pw = account.get("pw", "")
-    cookies  = account.get("cookies", "")
-    category = account.get("blog_category", "") or account.get("category", "")
+    naver_id   = account["id"]
+    cookies    = account.get("cookies", "")
+    blog_cat   = account.get("blog_category", "") or account.get("category", "")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -285,6 +355,7 @@ def _post_one_account(account: dict, naver_title: str, naver_content: str, naver
                 "--disable-blink-features=AutomationControlled",
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
+                "--window-size=1280,900",
             ],
         )
         context = browser.new_context(
@@ -295,77 +366,71 @@ def _post_one_account(account: dict, naver_title: str, naver_content: str, naver
             ),
             viewport={"width": 1280, "height": 900},
             locale="ko-KR",
+            timezone_id="Asia/Seoul",
+            extra_http_headers={
+                "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+            },
         )
 
-        # 임시 객체로 NAVER_COOKIES 오버라이드
-        _orig_env = os.environ.get("NAVER_COOKIES", "")
-        os.environ["NAVER_COOKIES"] = cookies
+        # webdriver 감지 차단 — 모든 페이지에 적용
+        context.add_init_script(_STEALTH_JS)
         page = context.new_page()
 
         try:
-            # 1. 로그인
-            cookie_loaded = _load_cookies(context) if cookies else False
-            if cookie_loaded:
-                if not _is_logged_in(page):
-                    print(f"   ⚠️ [{naver_id}] 쿠키 만료, ID/PW 시도...")
-                    _orig_id = os.environ.get("NAVER_ID", "")
-                    _orig_pw = os.environ.get("NAVER_PW", "")
-                    os.environ["NAVER_ID"] = naver_id
-                    os.environ["NAVER_PW"] = naver_pw
-                    ok = _login_pw(page)
-                    os.environ["NAVER_ID"] = _orig_id
-                    os.environ["NAVER_PW"] = _orig_pw
-                    if not ok:
-                        return False
-            else:
-                _orig_id = os.environ.get("NAVER_ID", "")
-                _orig_pw = os.environ.get("NAVER_PW", "")
-                os.environ["NAVER_ID"] = naver_id
-                os.environ["NAVER_PW"] = naver_pw
-                ok = _login_pw(page)
-                os.environ["NAVER_ID"] = _orig_id
-                os.environ["NAVER_PW"] = _orig_pw
-                if not ok:
-                    return False
+            # 1. 쿠키 로드 → 로그인 확인
+            if not _load_cookies(context, cookies):
+                print(f"   ❌ [{naver_id}] 쿠키 없음 — NAVER_COOKIES_{{category}} 설정 필요")
+                return False
 
-            # 2. 에디터 열기
+            if not _is_logged_in(page):
+                print(f"   ❌ [{naver_id}] 쿠키 만료 — 쿠키를 새로 추출해주세요")
+                return False
+
+            print(f"   ✅ [{naver_id}] 로그인 확인")
+
+            # 2. 블로그 에디터 열기
             write_url = f"https://blog.naver.com/{naver_id}/write"
             page.goto(write_url, timeout=30000)
-            page.wait_for_load_state("networkidle", timeout=20000)
-            time.sleep(3)
+            page.wait_for_load_state("networkidle", timeout=25000)
+            _pause(3.0, 5.0)  # 에디터 로드 후 사람처럼 잠깐 훑어봄
+            _scroll_naturally(page)
 
             # 3. 제목 입력
             title_sels = [".se-title-input", "#post-title", "input[placeholder*='제목']"]
             title_ok = False
             for sel in title_sels:
                 try:
-                    el = page.wait_for_selector(sel, timeout=5000)
-                    if el:
-                        el.click()
-                        el.fill(naver_title)
-                        title_ok = True
-                        break
+                    page.wait_for_selector(sel, timeout=6000)
+                    _human_move_and_click(page, sel)
+                    _pause(0.4, 0.8)
+                    _human_type(page, naver_title)
+                    title_ok = True
+                    print(f"   ✅ 제목 입력 완료")
+                    break
                 except PWTimeout:
                     continue
+
             if not title_ok:
-                print(f"   ⚠️ [{naver_id}] 제목 입력 실패")
+                print(f"   ⚠️ [{naver_id}] 제목 입력 영역 못 찾음")
                 return False
 
-            time.sleep(1)
+            _pause(1.0, 2.0)
 
             # 4. 본문 입력
             _type_in_editor(page, naver_content)
-            time.sleep(1)
+            _pause(1.5, 3.0)
 
-            # 5. 카테고리
-            _select_category(page, category)
+            # 5. 카테고리 선택
+            _select_category(page, blog_cat)
+            _pause(0.5, 1.0)
 
-            # 6. 태그
+            # 6. 태그 입력
             _input_tags(page, naver_tags)
+            _pause(1.0, 2.0)
 
             # 7. 발행
             if _click_publish(page):
-                print(f"   ✅ [{naver_id}] 발행 완료")
+                print(f"   ✅ [{naver_id}] 발행 완료: {naver_title}")
                 return True
             else:
                 print(f"   ⚠️ [{naver_id}] 발행 버튼 못 찾음")
@@ -375,7 +440,7 @@ def _post_one_account(account: dict, naver_title: str, naver_content: str, naver
             print(f"   ❌ [{naver_id}] 오류: {e}")
             return False
         finally:
-            os.environ["NAVER_COOKIES"] = _orig_env
+            _pause(1.0, 2.0)
             browser.close()
 
 
@@ -404,5 +469,4 @@ def post_naver_blog(title: str, wp_content: str, category: str = "") -> bool:
         print("   ❌ 네이버 콘텐츠 변환 실패")
         return False
 
-    # 계정의 blog_category를 account에 넣어서 전달
     return _post_one_account(account, naver_title, naver_content, naver_tags)
