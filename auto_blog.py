@@ -361,7 +361,7 @@ def main():
                              headers={"Authorization": f"Basic {cred}"}, timeout=10)
             if r.status_code == 200:
                 featured_image_url = r.json().get("source_url", "")
-        publish_to_sns(title, content, link, featured_image_url=featured_image_url)
+        publish_to_sns(title, content, link, featured_image_url=featured_image_url, category=CATEGORY)
     else:
         print("❌ 발행 실패")
         exit(1)

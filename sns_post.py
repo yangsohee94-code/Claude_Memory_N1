@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SNS 자동 발행 모듈 — Threads / Facebook / Pinterest"""
+"""SNS 자동 발행 모듈 — Threads / Facebook / Pinterest / 네이버 블로그"""
 import os, re, time, requests, anthropic
 from dotenv import load_dotenv
 
@@ -122,8 +122,8 @@ def post_pinterest(title: str, description: str, link: str, image_url: str = "")
 
 # ── 통합 발행 ────────────────────────────────────────────────────────────────
 
-def publish_to_sns(title: str, content: str, post_url: str, featured_image_url: str = ""):
-    """블로그 발행 후 SNS 전체 발행. 토큰 없는 플랫폼은 자동 건너뜀."""
+def publish_to_sns(title: str, content: str, post_url: str, featured_image_url: str = "", category: str = ""):
+    """블로그 발행 후 SNS + 네이버 블로그 전체 발행. 토큰 없는 플랫폼은 자동 건너뜀."""
     print("📱 SNS 발행 중...")
     texts = generate_sns_text(title, content, post_url)
     post_threads(texts.get("THREADS", ""), image_url=featured_image_url)
@@ -134,3 +134,11 @@ def publish_to_sns(title: str, content: str, post_url: str, featured_image_url: 
         link=post_url,
         image_url=featured_image_url,
     )
+    # 네이버 블로그 발행
+    try:
+        from naver_post import post_naver_blog
+        post_naver_blog(title, content, category=category)
+    except ImportError:
+        print("   ⏭️ 네이버 블로그: naver_post 모듈 없음, 건너뜀")
+    except Exception as e:
+        print(f"   ⚠️ 네이버 블로그 발행 오류: {e}")
