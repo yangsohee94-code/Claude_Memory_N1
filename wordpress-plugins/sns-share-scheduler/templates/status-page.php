@@ -24,10 +24,11 @@
         'facebook'  => 'f Facebook',
     ];
     $status_labels = [
-        'pending'   => '<span class="sns-status pending">⏳ 대기</span>',
-        'sent'      => '<span class="sns-status sent">✅ 완료</span>',
-        'failed'    => '<span class="sns-status failed">❌ 실패</span>',
-        'cancelled' => '<span class="sns-status cancelled">🚫 취소</span>',
+        'pending'    => '<span class="sns-status pending">⏳ 대기</span>',
+        'processing' => '<span class="sns-status processing">🔄 게시중</span>',
+        'sent'       => '<span class="sns-status sent">✅ 완료</span>',
+        'failed'     => '<span class="sns-status failed">❌ 실패</span>',
+        'cancelled'  => '<span class="sns-status cancelled">🚫 취소</span>',
     ];
     ?>
 

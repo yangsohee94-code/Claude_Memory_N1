@@ -173,7 +173,7 @@
     }
 
     function statusLabel(s) {
-        return { pending: '⏳대기', sent: '✅완료', failed: '❌실패', cancelled: '🚫취소' }[s] || s;
+        return { pending: '⏳대기', processing: '🔄게시중', sent: '✅완료', failed: '❌실패', cancelled: '🚫취소' }[s] || s;
     }
 
     if ( postId ) loadQueue();

@@ -46,6 +46,7 @@ class SNS_Twitter_API {
     private function upload_image( $image_url ) {
         $image_data = wp_remote_get( $image_url, [ 'timeout' => 30 ] );
         if ( is_wp_error( $image_data ) ) return null;
+        if ( wp_remote_retrieve_response_code( $image_data ) !== 200 ) return null;
 
         $media_url  = 'https://upload.twitter.com/1.1/media/upload.json';
         $body_params = [ 'media_data' => base64_encode( wp_remote_retrieve_body( $image_data ) ) ];

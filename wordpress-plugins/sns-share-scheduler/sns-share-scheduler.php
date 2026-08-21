@@ -46,7 +46,7 @@ function sns_scheduler_activate() {
         image_url varchar(500) DEFAULT '',
         post_url varchar(500) DEFAULT '',
         scheduled_at datetime NOT NULL,
-        status varchar(20) DEFAULT 'pending',
+        status varchar(20) DEFAULT 'pending' COMMENT 'pending|processing|sent|failed|cancelled',
         result text DEFAULT '',
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (id),

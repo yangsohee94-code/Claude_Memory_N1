@@ -57,6 +57,9 @@ class SNS_Scheduler {
         if ( ! $post_id || ! in_array( $platform, [ 'twitter', 'threads', 'pinterest', 'facebook' ] ) ) {
             wp_send_json_error( '잘못된 요청입니다.' );
         }
+        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+            wp_send_json_error( '이 글을 편집할 권한이 없습니다.' );
+        }
         $post = get_post( $post_id );
         if ( ! $post || $post->post_status !== 'publish' ) {
             wp_send_json_error( '발행된 글에서만 공유할 수 있습니다.' );
@@ -80,6 +83,9 @@ class SNS_Scheduler {
         }
         if ( ! $content ) {
             wp_send_json_error( '공유 문구를 입력해주세요.' );
+        }
+        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+            wp_send_json_error( '이 글을 편집할 권한이 없습니다.' );
         }
 
         $post = get_post( $post_id );
@@ -112,6 +118,7 @@ class SNS_Scheduler {
         check_ajax_referer( 'sns_share_nonce', 'nonce' );
         if ( ! current_user_can( 'edit_posts' ) ) wp_send_json_error( '권한이 없습니다.' );
         $post_id = intval( $_POST['post_id'] ?? 0 );
+        if ( ! $post_id || ! current_user_can( 'edit_post', $post_id ) ) wp_send_json_error( '권한이 없습니다.' );
 
         global $wpdb;
         $rows = $wpdb->get_results( $wpdb->prepare(
@@ -179,18 +186,37 @@ class SNS_Scheduler {
 
     public function process_queue() {
         global $wpdb;
-        $now  = current_time( 'mysql', true );
+        $table = $wpdb->prefix . 'sns_share_queue';
+        $now   = current_time( 'mysql', true );
+
+        // 10분 이상 processing 상태로 멈춘 항목 복구 (크론 비정상 종료 대비)
+        $wpdb->query( $wpdb->prepare(
+            "UPDATE $table SET status = 'pending'
+             WHERE status = 'processing' AND scheduled_at <= %s",
+            gmdate( 'Y-m-d H:i:s', time() - 10 * MINUTE_IN_SECONDS )
+        ) );
+
         $rows = $wpdb->get_results( $wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}sns_share_queue
+            "SELECT * FROM $table
              WHERE status = 'pending' AND scheduled_at <= %s
              ORDER BY scheduled_at ASC LIMIT 10",
             $now
         ) );
 
         foreach ( $rows as $row ) {
+            // 원자적 상태 전환: 'pending' → 'processing' (동시 실행 방지)
+            $claimed = $wpdb->update(
+                $table,
+                [ 'status' => 'processing' ],
+                [ 'id' => $row->id, 'status' => 'pending' ]
+            );
+            if ( ! $claimed ) {
+                continue; // 다른 프로세스가 먼저 가져간 경우 건너뜀
+            }
+
             $result = $this->dispatch( $row );
             $wpdb->update(
-                $wpdb->prefix . 'sns_share_queue',
+                $table,
                 [
                     'status' => $result['success'] ? 'sent' : 'failed',
                     'result' => $result['message'],
