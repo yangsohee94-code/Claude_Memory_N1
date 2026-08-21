@@ -18,11 +18,10 @@ add_filter( 'auth_cookie_expiration', function ( $expiration, $user_id, $remembe
 }, 10, 3 );
 
 // 로그인 상태일 때 매 페이지 로드마다 쿠키를 갱신 → 마지막 접속 기준 7일로 초기화
-add_action( 'wp_loaded', function () {
+// send_headers 훅은 parse_request 이후에 실행되므로
+// REST API·AJAX·Cron 요청은 그 이전에 exit → 별도 체크 없이 자동 제외
+add_action( 'send_headers', function () {
     if ( ! is_user_logged_in() ) return;
-    if ( defined( 'DOING_AJAX' ) && DOING_AJAX ) return;
-    if ( defined( 'DOING_CRON' ) && DOING_CRON ) return;
-    if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) return;
 
     $user_id = get_current_user_id();
     wp_set_auth_cookie( $user_id, true, is_ssl() );
