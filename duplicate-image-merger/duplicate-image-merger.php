@@ -3,7 +3,7 @@
  * Plugin Name: Duplicate Image Merger
  * Plugin URI:  https://github.com/yangsohee94-code/claude_memory_n1
  * Description: 중복 이미지 병합 · WebP 변환 · 대표이미지 정합성 자동 최적화
- * Version:     1.3.31
+ * Version:     1.3.32
  * Author:      Claude Memory N1
  * License:     GPL-2.0+
  * Text Domain: duplicate-image-merger
@@ -11,7 +11,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'DIM_VERSION',    '1.3.31' );
+define( 'DIM_VERSION',    '1.3.32' );
 define( 'DIM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DIM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -77,15 +77,25 @@ add_filter( 'wp_handle_upload_prefilter',   'dim_rename_upload_file' );
 add_filter( 'wp_handle_sideload_prefilter', 'dim_rename_upload_file' );
 
 // 업로드 즉시 WebP 자동 변환
-add_action( 'add_attachment', function ( $attachment_id ) {
+// ※ add_attachment 가 아닌 wp_generate_attachment_metadata 필터 사용:
+//   WordPress는 add_attachment → 썸네일 생성 순서로 동작하므로,
+//   add_attachment에서 원본 파일을 삭제하면 WordPress가 썸네일 생성 실패("서버 오류") 발생.
+//   이 필터는 썸네일 생성이 완료된 이후 실행되므로 안전하게 원본 삭제 가능.
+add_filter( 'wp_generate_attachment_metadata', function ( $metadata, $attachment_id ) {
     $mime = get_post_mime_type( $attachment_id );
-    if ( in_array( $mime, [ 'image/jpeg', 'image/png', 'image/gif' ], true ) ) {
-        $converter = new DIM_Converter();
-        if ( $converter->can_convert() ) {
-            $converter->convert_to_webp( $attachment_id );
-        }
+    if ( ! in_array( $mime, [ 'image/jpeg', 'image/png', 'image/gif' ], true ) ) {
+        return $metadata;
     }
-} );
+    $converter = new DIM_Converter();
+    if ( ! $converter->can_convert() ) return $metadata;
+
+    $result = $converter->convert_to_webp( $attachment_id );
+    // 변환 성공 시 메타데이터의 file 키도 WebP 경로로 갱신 (WordPress가 이후 DB에 저장)
+    if ( ( $result === true || $result === 'unlink' ) && isset( $metadata['file'] ) ) {
+        $metadata['file'] = preg_replace( '/\.(jpe?g|png|gif)$/i', '.webp', $metadata['file'] );
+    }
+    return $metadata;
+}, 10, 2 );
 
 register_deactivation_hook( __FILE__, function () {
     wp_clear_scheduled_hook( 'dim_optimize_cron' );
