@@ -43,20 +43,27 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: 카테고리별 발행 시간 분산 (3개 동시 발행 방지)
+      - name: 발행 시간 분산 (일별 + 카테고리별)
         run: |
-          # 각 카테고리마다 다른 딜레이로 시작 시간을 분산
-          # 네이버가 3개 계정이 동시에 글 쓰는 패턴을 감지하지 못하도록
+          # ── 1단계: 일별 오프셋 (매일 5분씩 다른 시간에 발행)
+          # 연중 몇 번째 날인지로 오프셋 계산 → 12일 주기로 0~55분 순환
+          # 결과 예시: 1일=5분, 2일=10분, 3일=15분 ... 12일=0분 → 반복
+          DAY_OF_YEAR=$(date +%j)
+          DAILY_OFFSET=$(( (10#$DAY_OF_YEAR * 5) % 60 ))
+          echo "📅 일별 오프셋: ${DAILY_OFFSET}분 (연중 ${DAY_OF_YEAR}일차)"
+          sleep $((DAILY_OFFSET * 60))
+
+          # ── 2단계: 카테고리별 간격 (3개 계정 동시 발행 방지)
           if [ "${{ matrix.category }}" = "car" ]; then
             DELAY=$((RANDOM % 600 + 600))   # 10~20분 후 시작
-            echo "⏱️ car: ${DELAY}초 후 시작"
+            echo "⏱️ car: ${DELAY}초 대기"
             sleep $DELAY
           elif [ "${{ matrix.category }}" = "health" ]; then
             DELAY=$((RANDOM % 600 + 1200))  # 20~30분 후 시작
-            echo "⏱️ health: ${DELAY}초 후 시작"
+            echo "⏱️ health: ${DELAY}초 대기"
             sleep $DELAY
           else
-            echo "⏱️ entertainment: 즉시 시작"
+            echo "⏱️ entertainment: 일별 오프셋만 적용"
           fi
       - name: 패키지 설치
         run: pip install anthropic requests python-dotenv google-api-python-client google-auth playwright
