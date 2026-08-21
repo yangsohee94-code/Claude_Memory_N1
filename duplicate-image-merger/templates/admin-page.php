@@ -226,6 +226,8 @@
         </div>
         <div class="dim-action-bar" style="margin-top:8px;">
             <button id="dim-scan-brokenimg-btn" class="button button-primary">🔍 이미지 오류 글 스캔</button>
+            <span class="dim-spacer"></span>
+            <button id="dim-remove-broken-blocks-btn" class="button dim-btn-danger" disabled>🧹 엑박 블록 글에서 자동 제거</button>
         </div>
 
         <div id="dim-progress-brokenimg" class="dim-progress-wrap" style="display:none;">

@@ -653,7 +653,23 @@
                     : brokenScanned + '개 스캔 완료 — 이미지 오류 글 없음 ✅';
                 progDone($progBroken, msg, true);
                 if (brokenFound > 1) $('#dim-brokenimg-sort-btn').show();
+                $('#dim-remove-broken-blocks-btn').prop('disabled', brokenFound === 0);
             }
+        });
+    }
+
+    function removeBrokenBlocks() {
+        var $btn = $('#dim-remove-broken-blocks-btn');
+        if (!confirm('글 본문에서 엑박 이미지 블록을 자동으로 제거합니다.\n이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?')) return;
+        $btn.prop('disabled', true).text('처리 중...');
+        var $prog = $('#dim-progress-brokenimg');
+        prog($prog, 0, 0, '글 정리 중');
+        post('remove_broken_blocks', {}, function(err, d) {
+            hideProg($prog);
+            $btn.prop('disabled', false).text('🧹 엑박 블록 글에서 자동 제거');
+            if (err) { notice(err.message, false); return; }
+            notice(d.posts_updated + '개 글에서 엑박 블록 ' + d.blocks_removed + '개 제거 완료', true);
+            if (d.posts_updated > 0) { loadBrokenImgPosts(false); }
         });
     }
 
@@ -950,6 +966,7 @@
         // 탭 ⑦ 이미지 오류 글
         $('#dim-scan-brokenimg-btn').on('click', function(){ loadBrokenImgPosts(false); });
         $('#dim-brokenimg-more-btn').on('click', function(){ loadBrokenImgPosts(true); });
+        $('#dim-remove-broken-blocks-btn').on('click', removeBrokenBlocks);
         $('#dim-brokenimg-sort-btn').on('click', function(){
             brokenSortDesc = !brokenSortDesc;
             $(this).text(brokenSortDesc ? '기본 순 ↑' : '오류 많은 순 ↓');

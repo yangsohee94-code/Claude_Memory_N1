@@ -527,6 +527,93 @@ class DIM_Stats {
     }
 
     /**
+     * 글 본문의 엑박 Gutenberg 이미지 블록 자동 제거
+     * — 파일이 없는 attachment ID를 참조하는 <!-- wp:image {"id":NNN} --> 블록을 삭제
+     */
+    public function remove_broken_image_blocks() {
+        global $wpdb;
+
+        // ① wp:image 블록이 있는 글/페이지만 가져옴
+        $posts = $wpdb->get_results(
+            "SELECT ID, post_content FROM {$wpdb->posts}
+             WHERE post_status = 'publish'
+               AND post_type IN ('post','page')
+               AND post_content LIKE '%<!-- wp:image%'"
+        );
+        if ( empty( $posts ) ) {
+            return [ 'posts_updated' => 0, 'blocks_removed' => 0 ];
+        }
+
+        // ② 본문에서 참조된 attachment ID 전부 수집
+        $all_ids = [];
+        foreach ( $posts as $p ) {
+            if ( preg_match_all( '/"id":(\d+)/', $p->post_content, $m ) ) {
+                foreach ( $m[1] as $id ) $all_ids[] = (int) $id;
+            }
+        }
+        $all_ids = array_unique( $all_ids );
+        if ( empty( $all_ids ) ) {
+            return [ 'posts_updated' => 0, 'blocks_removed' => 0 ];
+        }
+
+        // ③ 실제로 파일이 있는 attachment ID 확인
+        $upload_base = wp_upload_dir()['basedir'];
+        $placeholders = implode( ',', array_fill( 0, count( $all_ids ), '%d' ) );
+        // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT p.ID, m.meta_value AS rel_path
+                 FROM {$wpdb->posts} p
+                 LEFT JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = '_wp_attached_file'
+                 WHERE p.ID IN ({$placeholders})
+                   AND p.post_type = 'attachment'",
+                ...$all_ids
+            )
+        );
+        $valid_ids = [];
+        foreach ( $rows as $row ) {
+            $abs = $row->rel_path ? trailingslashit( $upload_base ) . $row->rel_path : '';
+            if ( $abs && file_exists( $abs ) ) {
+                $valid_ids[ (int) $row->ID ] = true;
+            }
+        }
+
+        // ④ 각 글에서 엑박 블록 제거
+        $posts_updated = 0;
+        $blocks_removed = 0;
+
+        foreach ( $posts as $p ) {
+            $new_content = preg_replace_callback(
+                '/<!-- wp:image (\{[^}]*\})[^>]*-->.*?<!-- \/wp:image -->/s',
+                function ( $match ) use ( $valid_ids, &$blocks_removed ) {
+                    $attrs = json_decode( $match[1], true );
+                    $id    = isset( $attrs['id'] ) ? (int) $attrs['id'] : 0;
+                    if ( $id && ! isset( $valid_ids[ $id ] ) ) {
+                        $blocks_removed++;
+                        return '';
+                    }
+                    return $match[0];
+                },
+                $p->post_content
+            );
+
+            if ( $new_content === null || $new_content === $p->post_content ) continue;
+
+            $wpdb->update(
+                $wpdb->posts,
+                [ 'post_content' => $new_content ],
+                [ 'ID' => $p->ID ],
+                [ '%s' ],
+                [ '%d' ]
+            );
+            clean_post_cache( $p->ID );
+            $posts_updated++;
+        }
+
+        return [ 'posts_updated' => $posts_updated, 'blocks_removed' => $blocks_removed ];
+    }
+
+    /**
      * 여러 첨부파일 삭제
      */
     public function delete_attachments( array $ids ) {

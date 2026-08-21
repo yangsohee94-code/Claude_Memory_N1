@@ -10,7 +10,7 @@ class DIM_Ajax {
             'get_stats', 'get_no_thumb_posts', 'get_nonwebp', 'delete_images', 'scan_unused',
             'get_broken_img_posts', 'get_h2_no_img_posts', 'crop_image', 'auto_set_thumb',
             'get_upload_settings', 'save_upload_settings',
-            'scan_broken_attachments',
+            'scan_broken_attachments', 'remove_broken_blocks',
         ];
         foreach ( $actions as $a ) {
             add_action( "wp_ajax_dim_{$a}", [ $this, "handle_{$a}" ] );
@@ -309,6 +309,13 @@ class DIM_Ajax {
             absint( $_POST['batch']  ?? 100 ),
             absint( $_POST['offset'] ?? 0 )
         ) );
+    }
+
+    public function handle_remove_broken_blocks() {
+        $this->auth();
+        @set_time_limit( 300 );
+        @ini_set( 'memory_limit', '256M' );
+        wp_send_json_success( ( new DIM_Stats() )->remove_broken_image_blocks() );
     }
 
     private function auth() {
