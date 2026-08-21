@@ -34,37 +34,127 @@ class DIM_Converter {
 
     /**
      * 전체 이미지 WebP 변환 (배치 처리)
-     * @return array { converted, skipped, errors }
+     *
+     * 속도 개선: 파일경로·메타데이터를 배치 JOIN 쿼리 2개로 사전 로드
+     * → 이미지당 쿼리 8회 → 2회로 감소
+     * 부작용 제거: wp_update_post() → 직접 DB 업데이트
+     * → save_post 훅 미발동 → Gutenberg 에디터 오염 방지
      */
     public function convert_all( $batch = 50, $offset = 0 ) {
         global $wpdb;
 
-        $ids = $wpdb->get_col( $wpdb->prepare(
-            "SELECT ID FROM {$wpdb->posts}
-             WHERE post_type = 'attachment'
-               AND post_mime_type IN ('image/jpeg','image/png','image/gif')
-             ORDER BY ID ASC LIMIT %d OFFSET %d",
+        $upload   = wp_upload_dir();
+        $base_dir = trailingslashit( $upload['basedir'] );
+        $base_url = trailingslashit( $upload['baseurl'] );
+
+        // ① 파일경로·MIME을 단일 JOIN으로 — get_attached_file() N+1 제거
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT p.ID, p.post_mime_type, m.meta_value AS rel_path
+             FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = '_wp_attached_file'
+             WHERE p.post_type = 'attachment'
+               AND p.post_mime_type IN ('image/jpeg','image/png','image/gif')
+             ORDER BY p.ID ASC LIMIT %d OFFSET %d",
             $batch, $offset
         ) );
 
-        $result = [ 'converted' => 0, 'skipped' => 0, 'errors' => [], 'unlink_failed' => 0, 'has_more' => count( $ids ) === $batch ];
+        if ( empty( $rows ) ) {
+            return [ 'converted' => 0, 'skipped' => 0, 'errors' => [], 'unlink_failed' => 0, 'has_more' => false ];
+        }
 
-        foreach ( $ids as $id ) {
-            $r = $this->convert_to_webp( (int) $id );
-            if ( $r === true )            $result['converted']++;
-            elseif ( $r === 'skip' )      $result['skipped']++;
-            elseif ( $r === 'unlink' )  { $result['converted']++; $result['unlink_failed']++; }
-            else                          $result['errors'][] = "ID {$id}: {$r}";
+        // ② _wp_attachment_metadata 배치 로드 — 이미지당 1쿼리 제거
+        $all_ids  = array_map( fn( $r ) => (int) $r->ID, $rows );
+        $ph       = implode( ',', array_fill( 0, count( $all_ids ), '%d' ) );
+        // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+        $meta_rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT post_id, meta_value FROM {$wpdb->postmeta}
+                 WHERE post_id IN ({$ph}) AND meta_key = '_wp_attachment_metadata'",
+                ...$all_ids
+            )
+        );
+        $meta_map = [];
+        foreach ( $meta_rows as $mr ) {
+            $meta_map[ (int) $mr->post_id ] = maybe_unserialize( $mr->meta_value );
+        }
+
+        $result = [
+            'converted'     => 0,
+            'skipped'       => 0,
+            'errors'        => [],
+            'unlink_failed' => 0,
+            'has_more'      => count( $rows ) === $batch,
+        ];
+
+        foreach ( $rows as $row ) {
+            $id       = (int) $row->ID;
+            $rel_path = $row->rel_path;
+            $mime     = $row->post_mime_type;
+
+            if ( ! $rel_path || $mime === 'image/webp' ) { $result['skipped']++; continue; }
+
+            $file     = $base_dir . $rel_path;
+            $webp_rel = preg_replace( '/\.(jpe?g|png|gif)$/i', '.webp', $rel_path );
+
+            if ( $webp_rel === $rel_path ) { $result['skipped']++; continue; }
+            if ( ! file_exists( $file ) ) {
+                $result['errors'][] = "ID {$id}: 원본 파일 없음: " . basename( $file );
+                continue;
+            }
+
+            $webp_file = $base_dir . $webp_rel;
+
+            if ( ! file_exists( $webp_file ) ) {
+                $ok = $this->do_convert( $file, $webp_file, $mime );
+                if ( $ok !== true ) { $result['errors'][] = "ID {$id}: {$ok}"; continue; }
+            }
+
+            $old_url = $base_url . $rel_path;
+            $new_url = $base_url . $webp_rel;
+
+            // ③ 직접 DB 업데이트 — wp_update_post() 훅 미발동 (save_post 없음)
+            $wpdb->update( $wpdb->posts,    [ 'post_mime_type' => 'image/webp' ], [ 'ID' => $id ], [ '%s' ], [ '%d' ] );
+            $wpdb->update( $wpdb->postmeta, [ 'meta_value' => $webp_file ],
+                [ 'post_id' => $id, 'meta_key' => '_wp_attached_file' ], [ '%s' ], [ '%d', '%s' ] );
+
+            // ④ 사전 로드된 메타에서 file 키만 교체 — wp_get_attachment_metadata() 쿼리 없음
+            $meta = $meta_map[ $id ] ?? null;
+            if ( is_array( $meta ) ) {
+                $meta['file'] = $webp_rel;
+                $wpdb->update( $wpdb->postmeta, [ 'meta_value' => maybe_serialize( $meta ) ],
+                    [ 'post_id' => $id, 'meta_key' => '_wp_attachment_metadata' ], [ '%s' ], [ '%d', '%s' ] );
+            }
+
+            // 오브젝트 캐시 무효화 (직접 DB 업데이트 후 필수)
+            wp_cache_delete( $id, 'posts' );
+            wp_cache_delete( $id, 'post_meta' );
+
+            // ⑤ 본문 이미지 URL 교체
+            $wpdb->query( $wpdb->prepare(
+                "UPDATE {$wpdb->posts} SET post_content = REPLACE(post_content, %s, %s)
+                 WHERE post_content LIKE %s",
+                $old_url, $new_url, '%' . $wpdb->esc_like( basename( $file ) ) . '%'
+            ) );
+
+            // ⑥ 원본 삭제
+            if ( file_exists( $file ) && ! @unlink( $file ) ) {
+                $result['converted']++;
+                $result['unlink_failed']++;
+            } else {
+                $result['converted']++;
+            }
         }
 
         return $result;
     }
 
     /**
-     * 단일 첨부파일 → WebP 변환
-     * @return true|'skip'|string(오류)
+     * 단일 첨부파일 → WebP 변환 (선택 변환 시 호출)
+     * @return true|'skip'|'unlink'|string(오류)
      */
     public function convert_to_webp( int $id ) {
+        global $wpdb;
+
         $file = get_attached_file( $id );
         if ( ! $file ) return 'skip';
         if ( ! file_exists( $file ) ) return '원본 파일 없음: ' . basename( $file );
@@ -75,47 +165,46 @@ class DIM_Converter {
         $webp_file = preg_replace( '/\.(jpe?g|png|gif)$/i', '.webp', $file );
         if ( $webp_file === $file ) return 'skip';
 
-        // webp 파일이 이미 디스크에 있으면 변환 생략, DB만 동기화
-        // (이전 실행에서 파일 생성 후 DB 업데이트 실패 시 여기로 진입)
-        $already_exists = file_exists( $webp_file );
-        if ( ! $already_exists ) {
+        if ( ! file_exists( $webp_file ) ) {
             $ok = $this->do_convert( $file, $webp_file, $mime );
             if ( $ok !== true ) return $ok;
         }
 
+        // 단일 변환은 wp_get_attachment_url() 사용 (CDN 필터 적용 보장)
         $old_url  = wp_get_attachment_url( $id );
         $new_url  = str_replace( basename( $file ), basename( $webp_file ), $old_url );
         $upload   = wp_upload_dir();
         $rel_path = ltrim( str_replace( trailingslashit( $upload['basedir'] ), '', $webp_file ), '/' );
 
-        // WordPress 메타 업데이트
-        update_attached_file( $id, $webp_file );
-        wp_update_post( [ 'ID' => $id, 'post_mime_type' => 'image/webp' ] );
+        // wp_update_post() → 직접 DB 업데이트 (save_post 훅 미발동)
+        $wpdb->update( $wpdb->posts,    [ 'post_mime_type' => 'image/webp' ], [ 'ID' => $id ], [ '%s' ], [ '%d' ] );
+        $wpdb->update( $wpdb->postmeta, [ 'meta_value' => $webp_file ],
+            [ 'post_id' => $id, 'meta_key' => '_wp_attached_file' ], [ '%s' ], [ '%d', '%s' ] );
 
         $meta = wp_get_attachment_metadata( $id );
         if ( $meta ) {
             $meta['file'] = $rel_path;
-            wp_update_attachment_metadata( $id, $meta );
+            $wpdb->update( $wpdb->postmeta, [ 'meta_value' => maybe_serialize( $meta ) ],
+                [ 'post_id' => $id, 'meta_key' => '_wp_attachment_metadata' ], [ '%s' ], [ '%d', '%s' ] );
         }
 
+        // 오브젝트 캐시 무효화
+        wp_cache_delete( $id, 'posts' );
+        wp_cache_delete( $id, 'post_meta' );
+
         // 본문 URL 교체
-        global $wpdb;
         $wpdb->query( $wpdb->prepare(
             "UPDATE {$wpdb->posts} SET post_content = REPLACE(post_content, %s, %s)
              WHERE post_content LIKE %s",
             $old_url, $new_url, '%' . $wpdb->esc_like( basename( $file ) ) . '%'
         ) );
 
-        // 원본 삭제 — 실패해도 변환 자체는 성공으로 처리 (별도 카운터)
         if ( file_exists( $file ) && ! @unlink( $file ) ) return 'unlink';
 
         return true;
     }
 
     private function do_convert( string $src, string $dest, string $mime ) {
-        // is_writable() 체크 제거: 업로드된 파일이 있으면 디렉토리 쓰기 가능.
-        // 일부 서버에서 심볼릭 링크 등으로 is_writable() 오탐 → 실제 쓰기로 판별.
-
         if ( extension_loaded( 'imagick' ) ) {
             try {
                 $img = new Imagick( $src );
@@ -125,7 +214,7 @@ class DIM_Converter {
                 $img->destroy();
                 return true;
             } catch ( \Throwable $e ) {
-                // Imagick 실패 (PHP8 Error 포함) → GD로 폴백
+                // Imagick 실패 → GD로 폴백
             }
         }
 
@@ -137,7 +226,6 @@ class DIM_Converter {
         } elseif ( $mime === 'image/png' ) {
             $img = @imagecreatefrompng( $src );
             if ( $img ) {
-                // 팔레트(Indexed) 모드 PNG는 imagewebp() 실패 → 트루컬러로 변환
                 if ( ! imageistruecolor( $img ) ) {
                     $tc = imagecreatetruecolor( imagesx( $img ), imagesy( $img ) );
                     imagealphablending( $tc, false );
