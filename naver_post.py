@@ -66,6 +66,16 @@ NAVER_TAGS: [태그1,태그2,태그3,태그4,태그5,태그6,태그7]
 """
 
 
+# 재창작 각도 — 같은 소재를 매번 다른 시각으로 써서 유사 콘텐츠 감지 방지
+_ANGLES = [
+    "독자가 '나에게 해당되는가'에 집중. 조건·자격·상황별 분기를 중심으로 재창작.",
+    "독자가 가장 궁금해할 '실제 비용·수치'를 중심으로 재창작. 구체적 금액과 조건 부각.",
+    "'지금 해야 하는 이유'와 타이밍을 중심으로 재창작. 기한·변화·현재 시점 강조.",
+    "'대부분 모르는 단점·함정'을 중심으로 재창작. 솔직한 시각으로 균형 있게.",
+    "'경쟁 대상과 비교하면 어떤가'를 중심으로 재창작. 차이점과 선택 기준 부각.",
+]
+
+
 def convert_wp_to_naver(title: str, wp_html: str, category: str = "") -> dict:
     """워드프레스 HTML 본문 → 네이버 블로그 최적화 텍스트 변환"""
     plain = re.sub(r'<[^>]+>', ' ', wp_html)
@@ -73,8 +83,14 @@ def convert_wp_to_naver(title: str, wp_html: str, category: str = "") -> dict:
     plain = re.sub(r'[ \t]+', ' ', plain)
     plain = re.sub(r'\n{3,}', '\n\n', plain).strip()
 
+    # 발행 시각 기반으로 각도 선택 (같은 날 2번 발행해도 다른 각도)
+    angle = _ANGLES[int(time.time() / 3600) % len(_ANGLES)]
     category_hint = f"\n카테고리: {category}" if category else ""
-    user_msg = f"원본 제목: {title}{category_hint}\n\n원본 본문:\n{plain[:3500]}"
+    user_msg = (
+        f"원본 제목: {title}{category_hint}\n"
+        f"재창작 각도: {angle}\n\n"
+        f"원본 본문:\n{plain[:3500]}"
+    )
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     resp = client.messages.create(

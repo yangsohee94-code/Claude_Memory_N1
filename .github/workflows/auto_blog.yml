@@ -43,6 +43,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: 카테고리별 발행 시간 분산 (3개 동시 발행 방지)
+        run: |
+          # 각 카테고리마다 다른 딜레이로 시작 시간을 분산
+          # 네이버가 3개 계정이 동시에 글 쓰는 패턴을 감지하지 못하도록
+          if [ "${{ matrix.category }}" = "car" ]; then
+            DELAY=$((RANDOM % 600 + 600))   # 10~20분 후 시작
+            echo "⏱️ car: ${DELAY}초 후 시작"
+            sleep $DELAY
+          elif [ "${{ matrix.category }}" = "health" ]; then
+            DELAY=$((RANDOM % 600 + 1200))  # 20~30분 후 시작
+            echo "⏱️ health: ${DELAY}초 후 시작"
+            sleep $DELAY
+          else
+            echo "⏱️ entertainment: 즉시 시작"
+          fi
       - name: 패키지 설치
         run: pip install anthropic requests python-dotenv google-api-python-client google-auth playwright
       - name: Playwright Chromium 설치
