@@ -472,7 +472,9 @@ class DIM_Stats {
             $blocks = preg_split( '/(?=<!-- wp:)/', $content );
             $n      = count( $blocks );
             for ( $i = 0; $i < $n; $i++ ) {
-                if ( ! preg_match( '/<!-- wp:heading[^-]*"level"\s*:\s*2/', $blocks[ $i ] ) ) continue;
+                // "level":2 는 기본값이라 생략되는 경우가 대부분 → 내부 HTML의 <h2 로 판단
+                if ( ! preg_match( '/<!-- wp:heading/', $blocks[ $i ] )
+                     || ! preg_match( '/<h2[\s>]/i', $blocks[ $i ] ) ) continue;
                 // 다음 비어있지 않은 블록 찾기
                 $next = '';
                 for ( $j = $i + 1; $j < $n; $j++ ) {
