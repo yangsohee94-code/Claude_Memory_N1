@@ -11,7 +11,7 @@ class DIM_Ajax {
             'get_broken_img_posts', 'get_h2_no_img_posts', 'crop_image', 'auto_set_thumb',
             'get_upload_settings', 'save_upload_settings',
             'scan_broken_attachments', 'remove_broken_blocks',
-            'fill_thumbnails',
+            'fill_thumbnails', 'fix_og_images',
         ];
         foreach ( $actions as $a ) {
             add_action( "wp_ajax_dim_{$a}", [ $this, "handle_{$a}" ] );
@@ -99,6 +99,12 @@ class DIM_Ajax {
             'prefix'  => $prefix,
             'counter' => $counter,
         ] );
+    }
+
+    public function handle_fix_og_images() {
+        $this->auth();
+        @set_time_limit( 120 );
+        wp_send_json_success( ( new DIM_Thumbnail() )->fix_og_images() );
     }
 
     public function handle_fill_thumbnails() {

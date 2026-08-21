@@ -166,6 +166,27 @@
         });
     }
 
+    function fixOgImages() {
+        var $btn = $('#dim-fix-og-btn');
+        $btn.prop('disabled', true);
+        prog(getProgDup(), 0, 0, 'SNS OG 이미지 확인 중...');
+        post('fix_og_images', {}, function(err, d) {
+            $btn.prop('disabled', false);
+            if (err) {
+                progDone(getProgDup(), err.message, false);
+                notice(err.message, false);
+                return;
+            }
+            var msg = 'SNS OG 이미지 수정 완료 — 총 ' + d.total_checked + '개 확인';
+            if (d.fixed)   msg += ' · WebP로 업데이트 ' + d.fixed + '개';
+            if (d.cleared) msg += ' · 삭제(대표이미지로 폴백) ' + d.cleared + '개';
+            if (!d.fixed && !d.cleared) msg += ' — 이미 모두 정상입니다 ✅';
+            msg += '\n※ 이미 SNS에 공유된 링크는 각 플랫폼 캐시를 수동으로 갱신해야 합니다.';
+            progDone(getProgDup(), msg.split('\n')[0], true);
+            notice(msg.replace('\n', '<br>'), true);
+        });
+    }
+
     function runAll() {
         if (DIM.can_webp) {
             prog(getProgDup(), 0, 0, 'WebP 변환 중');
@@ -962,6 +983,7 @@
         // 탭 ①
         $('#dim-scan-btn').on('click', startScan);
         $('#dim-thumb-btn').on('click', fixThumbnails);
+        $('#dim-fix-og-btn').on('click', fixOgImages);
         $('#dim-run-now-btn').on('click', runAll);
 
         // 탭 ②

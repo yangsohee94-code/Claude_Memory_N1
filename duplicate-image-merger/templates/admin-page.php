@@ -36,6 +36,7 @@
             <button id="dim-scan-btn" class="button button-primary">🔍 중복 이미지 스캔</button>
             <span class="dim-spacer"></span>
             <button id="dim-thumb-btn" class="button dim-btn-thumb">🖼 대표이미지 정합성 수정</button>
+            <button id="dim-fix-og-btn" class="button dim-btn-thumb">📢 SNS OG 이미지 수정</button>
         </div>
 
         <div id="dim-progress-dup" class="dim-progress-wrap" style="display:none;">

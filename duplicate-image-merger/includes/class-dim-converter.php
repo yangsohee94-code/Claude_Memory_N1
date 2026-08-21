@@ -142,7 +142,20 @@ class DIM_Converter {
                 $old_url, $new_url, '%' . $wpdb->esc_like( basename( $file ) ) . '%'
             ) );
 
-            // ⑥ 원본 삭제
+            // ⑥ SEO 플러그인 SNS OG 이미지 URL 동기화 (Rank Math / Yoast)
+            $like = '%' . $wpdb->esc_like( basename( $file ) ) . '%';
+            $wpdb->query( $wpdb->prepare(
+                "UPDATE {$wpdb->postmeta}
+                 SET meta_value = REPLACE(meta_value, %s, %s)
+                 WHERE meta_key IN (
+                     'rank_math_facebook_image','rank_math_twitter_image',
+                     '_yoast_wpseo_opengraph-image','_yoast_wpseo_twitter-image'
+                 )
+                 AND meta_value LIKE %s",
+                $old_url, $new_url, $like
+            ) );
+
+            // ⑦ 원본 삭제
             if ( file_exists( $file ) && ! @unlink( $file ) ) {
                 $result['converted']++;
                 $result['unlink_failed']++;
@@ -203,6 +216,19 @@ class DIM_Converter {
             "UPDATE {$wpdb->posts} SET post_content = REPLACE(post_content, %s, %s)
              WHERE post_content LIKE %s",
             $old_url, $new_url, '%' . $wpdb->esc_like( basename( $file ) ) . '%'
+        ) );
+
+        // SEO 플러그인 SNS OG 이미지 URL 동기화 (Rank Math / Yoast)
+        $like = '%' . $wpdb->esc_like( basename( $file ) ) . '%';
+        $wpdb->query( $wpdb->prepare(
+            "UPDATE {$wpdb->postmeta}
+             SET meta_value = REPLACE(meta_value, %s, %s)
+             WHERE meta_key IN (
+                 'rank_math_facebook_image','rank_math_twitter_image',
+                 '_yoast_wpseo_opengraph-image','_yoast_wpseo_twitter-image'
+             )
+             AND meta_value LIKE %s",
+            $old_url, $new_url, $like
         ) );
 
         if ( file_exists( $file ) && ! @unlink( $file ) ) return 'unlink';

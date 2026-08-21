@@ -293,6 +293,79 @@ class DIM_Thumbnail {
     }
 
     /**
+     * SEO 플러그인 SNS OG 이미지 메타 일괄 수정
+     * - 파일이 존재하지 않는 OG 이미지 URL → WebP 버전이 있으면 교체, 없으면 메타 삭제
+     * - 메타 삭제 시 Rank Math / Yoast 는 featured image 를 자동 사용
+     *
+     * @return array { fixed, cleared, total_checked }
+     */
+    public function fix_og_images(): array {
+        global $wpdb;
+
+        $upload_url  = trailingslashit( wp_upload_dir()['baseurl'] );
+        $upload_base = trailingslashit( wp_upload_dir()['basedir'] );
+
+        $og_keys = [
+            'rank_math_facebook_image', 'rank_math_twitter_image',
+            '_yoast_wpseo_opengraph-image', '_yoast_wpseo_twitter-image',
+        ];
+        $ph = implode( ',', array_fill( 0, count( $og_keys ), '%s' ) );
+
+        // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT meta_id, post_id, meta_key, meta_value
+                 FROM {$wpdb->postmeta}
+                 WHERE meta_key IN ({$ph})
+                   AND meta_value != ''",
+                ...$og_keys
+            )
+        );
+
+        $fixed   = 0;
+        $cleared = 0;
+
+        foreach ( $rows as $row ) {
+            $url = $row->meta_value;
+
+            // 업로드 디렉토리 외부 URL은 건드리지 않음
+            if ( strpos( $url, $upload_url ) === false ) continue;
+
+            $rel = ltrim( str_replace( $upload_url, '', $url ), '/' );
+            $abs = $upload_base . $rel;
+
+            if ( file_exists( $abs ) ) continue; // 정상
+
+            // WebP 버전 확인
+            $webp_rel = preg_replace( '/\.(jpe?g|png|gif)$/i', '.webp', $rel );
+            $webp_abs = $upload_base . $webp_rel;
+
+            if ( $webp_rel !== $rel && file_exists( $webp_abs ) ) {
+                // WebP 파일로 URL 교체
+                $wpdb->update(
+                    $wpdb->postmeta,
+                    [ 'meta_value' => $upload_url . $webp_rel ],
+                    [ 'meta_id'   => (int) $row->meta_id ],
+                    [ '%s' ], [ '%d' ]
+                );
+                wp_cache_delete( (int) $row->post_id, 'post_meta' );
+                $fixed++;
+            } else {
+                // 파일 없음 → 메타 삭제 (SEO 플러그인이 featured image로 폴백)
+                $wpdb->delete( $wpdb->postmeta, [ 'meta_id' => (int) $row->meta_id ], [ '%d' ] );
+                wp_cache_delete( (int) $row->post_id, 'post_meta' );
+                $cleared++;
+            }
+        }
+
+        return [
+            'fixed'         => $fixed,
+            'cleared'       => $cleared,
+            'total_checked' => count( $rows ),
+        ];
+    }
+
+    /**
      * 첨부파일이 DB에 존재하고 실제 파일도 디스크에 있는지 확인
      */
     private function attachment_file_exists( int $id ): bool {
