@@ -40,12 +40,13 @@ class DIM_Converter {
      * 부작용 제거: wp_update_post() → 직접 DB 업데이트
      * → save_post 훅 미발동 → Gutenberg 에디터 오염 방지
      */
-    public function convert_all( $batch = 50, $offset = 0 ) {
+    public function convert_all( $batch = 10, $offset = 0 ) {
         global $wpdb;
 
-        $upload   = wp_upload_dir();
-        $base_dir = trailingslashit( $upload['basedir'] );
-        $base_url = trailingslashit( $upload['baseurl'] );
+        $start_time = microtime( true );
+        $upload     = wp_upload_dir();
+        $base_dir   = trailingslashit( $upload['basedir'] );
+        $base_url   = trailingslashit( $upload['baseurl'] );
 
         // ① 파일경로·MIME을 단일 JOIN으로 — get_attached_file() N+1 제거
         $rows = $wpdb->get_results( $wpdb->prepare(
@@ -87,6 +88,11 @@ class DIM_Converter {
         ];
 
         foreach ( $rows as $row ) {
+            // 서버 타임아웃(60초) 전에 안전하게 중단 — 다음 배치에서 이어서 처리
+            if ( microtime( true ) - $start_time > 60 ) {
+                $result['has_more'] = true;
+                break;
+            }
             $id       = (int) $row->ID;
             $rel_path = $row->rel_path;
             $mime     = $row->post_mime_type;

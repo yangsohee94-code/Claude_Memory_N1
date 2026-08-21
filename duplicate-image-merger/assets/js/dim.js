@@ -180,7 +180,7 @@
 
     // offset=0 고정: 변환 후 mime_type이 webp로 바뀌므로 다음 쿼리에서 자동 제외됨
     function webpAllSync(done) {
-        post('convert_webp', { offset: 0, batch: 50 }, function(err, d) {
+        post('convert_webp', { offset: 0, batch: 10 }, function(err, d) {
             if (err || !d) { done(); return; }
             var batchDone = (d.converted || 0) + (d.skipped || 0) + (d.errors || []).length;
             if (d.has_more && batchDone > 0) { webpAllSync(done); return; }
@@ -277,17 +277,26 @@
     }
 
     // offset=0 고정: 변환 후 mime_type이 webp로 바뀌어 다음 쿼리에서 자동 제외됨
-    // batchDone===0이면 진행 불가(전체 오류)로 판단해 중단 — 무한루프 방지
+    // converted===0이면 진행 불가(전체 오류/타임아웃)로 판단해 재시도 제한
     function webpBatch(totals) {
         var processed = totals.converted + totals.skipped + totals.errors;
-        var total = totalNonWebp ? (totalNonWebp - totals.skipped) : (processed + 50);
+        var total = totalNonWebp ? (totalNonWebp - totals.skipped) : (processed + 10);
         prog($progWebp, totals.converted, total,
             'WebP 변환 중 · 성공 ' + totals.converted + ' / 건너뜀 ' + totals.skipped);
-        post('convert_webp', { offset: 0, batch: 50 }, function(err, d) {
+        post('convert_webp', { offset: 0, batch: 10 }, function(err, d) {
             if (err) {
+                // 서버 타임아웃 등 일시적 오류 → 자동 재시도 (최대 3회)
+                totals.retries = (totals.retries || 0) + 1;
+                if (totals.retries <= 3) {
+                    prog($progWebp, totals.converted, total,
+                        '재시도 중(' + totals.retries + '/3)... · 성공 ' + totals.converted);
+                    setTimeout(function(){ webpBatch(totals); }, 2000);
+                    return;
+                }
                 hideProg($progWebp);
-                return notice('변환 오류: ' + (err.message || ''), false);
+                return notice('변환 오류: ' + (err.message || '') + ' (재시도 3회 실패)', false);
             }
+            totals.retries = 0; // 성공 시 재시도 카운터 초기화
             var batchConverted = d.converted || 0;
             var batchSkipped   = d.skipped   || 0;
             var batchErrMsgs   = d.errors    || [];
@@ -297,7 +306,7 @@
             totals.unlink_failed += d.unlink_failed || 0;
             if (!totals.firstError && batchErrMsgs.length) totals.firstError = batchErrMsgs[0];
             // 실제로 변환된 이미지가 있을 때만 다음 배치 진행
-            // skip(파일 없음)이나 오류만 있으면 무한루프 방지 — converted만 진행 기준으로 사용
+            // skip(파일 없음)이나 오류만 있으면 무한루프 방지
             var madeProgress = batchConverted > 0;
             if (d.has_more && madeProgress) { webpBatch(totals); return; }
             var ok  = totals.errors === 0 && totals.converted > 0;
