@@ -15,10 +15,9 @@
 ├── topics/                   # 카테고리별 주제 목록
 ├── references/               # 카테고리별 참고 자료
 │
-├── wordpress-plugins/        # WordPress 플러그인
-│   ├── duplicate-image-merger/    # 중복 이미지 통합 플러그인
-│   ├── quick-image-insert/        # 빠른 이미지 삽입 플러그인
-│   └── sns-share-scheduler/       # SNS 예약 발행 플러그인
+├── duplicate-image-merger/   # WordPress 플러그인: 중복 이미지 통합
+├── quick-image-insert/       # WordPress 플러그인: 빠른 이미지 삽입
+├── sns-share-scheduler/      # WordPress 플러그인: SNS 예약 발행
 │
 └── index.html                # NotebookLM 노트북 목록 뷰어 (구글 드라이브 API 사용)
 ```
