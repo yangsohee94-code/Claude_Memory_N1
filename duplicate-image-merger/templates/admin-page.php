@@ -83,6 +83,12 @@
     <div class="dim-tab-content" id="dim-tab-nothumb">
         <div class="dim-action-bar">
             <button id="dim-load-nothumb-btn" class="button button-primary">📋 대표이미지 없는 글 불러오기</button>
+            <button id="dim-fill-thumbs-btn" class="button dim-btn-thumb">⚡ 화질 기준 전체 썸네일 자동 설정</button>
+        </div>
+
+        <div id="dim-progress-fill-thumbs" class="dim-progress-wrap" style="display:none;">
+            <div class="dim-progress-inner"><div class="dim-progress-bar"></div></div>
+            <span class="dim-progress-text"></span>
         </div>
 
         <div id="dim-progress-nothumb" class="dim-progress-wrap" style="display:none;">

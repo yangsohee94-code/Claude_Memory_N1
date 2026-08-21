@@ -407,6 +407,22 @@
         });
     }
 
+    function fillAllThumbs() {
+        var $prog = $('#dim-progress-fill-thumbs');
+        prog($prog, 0, 0, '썸네일 자동 설정 중...');
+        $('#dim-fill-thumbs-btn').prop('disabled', true);
+        post('fill_thumbnails', {}, function(err, d) {
+            hideProg($prog);
+            $('#dim-fill-thumbs-btn').prop('disabled', false);
+            if (err) return notice(err.message, false);
+            var msg = d.filled + '개 설정 완료';
+            if (d.skipped) msg += ' · ' + d.skipped + '개 이미지 없음';
+            if (d.truncated) msg += ' (시간 초과 — 다시 실행하면 이어서 처리됩니다)';
+            notice(msg, true);
+            if (d.filled > 0) loadNoThumb(false);
+        });
+    }
+
     // ═══════════════════════════════════
     // ⑤ 미사용 이미지
     // ═══════════════════════════════════
@@ -945,6 +961,7 @@
         // 탭 ③
         $('#dim-load-nothumb-btn').on('click', function(){ loadNoThumb(false); });
         $('#dim-nothumb-more-btn').on('click', function(){ loadNoThumb(true); });
+        $('#dim-fill-thumbs-btn').on('click', fillAllThumbs);
         $(document).on('click', '.dim-auto-thumb-btn', function(){
             var $btn    = $(this);
             var postId  = $btn.data('post-id');
