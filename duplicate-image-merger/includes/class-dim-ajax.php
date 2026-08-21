@@ -192,7 +192,7 @@ class DIM_Ajax {
 
     public function handle_delete_images() {
         $this->auth();
-        $ids = array_map( 'absint', (array)( $_POST['ids'] ?? [] ) );
+        $ids = array_values( array_filter( array_map( 'absint', (array)( $_POST['ids'] ?? [] ) ) ) );
         if ( empty( $ids ) ) wp_send_json_error( [ 'message' => '삭제할 이미지가 없습니다.' ] );
         wp_send_json_success( ( new DIM_Stats() )->delete_attachments( $ids ) );
     }

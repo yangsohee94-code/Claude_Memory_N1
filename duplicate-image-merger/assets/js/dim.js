@@ -567,14 +567,23 @@
     function deleteBrokenAtts(ids) {
         if (!ids.length) return;
         if (!confirm(ids.length + '개 항목을 미디어 라이브러리에서 삭제합니다. 복구 불가합니다.')) return;
-        prog($progBrokenAtt || $('#dim-progress-brokenatt'), 0, 0, '삭제 중');
+        // 삭제 중 버튼 비활성 (중복 클릭 방지)
+        $('#dim-delete-brokenatt-btn, #dim-delete-all-brokenatt-btn').prop('disabled', true);
+        var $prog = $progBrokenAtt || $('#dim-progress-brokenatt');
+        prog($prog, 0, 0, '삭제 중');
         post('delete_images', { ids: ids }, function(err, d) {
-            hideProg($progBrokenAtt || $('#dim-progress-brokenatt'));
-            if (err) { notice(err.message, false); return; }
+            // hideProg 대신 동기 hide — 700ms 타이머가 재스캔 progress bar와 race하지 않도록
+            $prog.hide();
+            if (err || !d) {
+                notice((err && err.message) || '서버 오류', false);
+                $('#dim-delete-all-brokenatt-btn').prop('disabled', false);
+                return;
+            }
+            var ok  = !d.errors || !d.errors.length;
             var msg = d.deleted + '개 삭제 완료';
             if (d.errors && d.errors.length) msg += ' · 실패 ' + d.errors.length + '개';
-            notice(msg, !d.errors || !d.errors.length);
-            scanBrokenAtts();
+            notice(msg, ok);
+            scanBrokenAtts(); // 재스캔이 버튼 상태를 재설정
         });
     }
 
