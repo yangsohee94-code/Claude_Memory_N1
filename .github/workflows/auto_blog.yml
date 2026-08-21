@@ -1,5 +1,11 @@
 name: 자동 블로그 발행 (스케줄)
 on:
+  schedule:
+    # 하루 2회 자동 실행 → 카테고리 3개 × 2회 = 6개/일
+    # 1회차: 09:00 KST (00:00 UTC) — 실제 발행은 일별 오프셋 + 카테고리 딜레이로 분산
+    - cron: '0 0 * * *'
+    # 2회차: 19:00 KST (10:00 UTC)
+    - cron: '0 10 * * *'
   workflow_dispatch:
     inputs:
       category:
@@ -47,7 +53,7 @@ jobs:
         run: |
           # ── 1단계: 일별 오프셋 (매일 5분씩 다른 시간에 발행)
           # 연중 몇 번째 날인지로 오프셋 계산 → 12일 주기로 0~55분 순환
-          # 결과 예시: 1일=5분, 2일=10분, 3일=15분 ... 12일=0분 → 반복
+          # 예: 1일=5분, 2일=10분 ... 12일=0분 → 반복 (7일 주기와 겹치지 않음)
           DAY_OF_YEAR=$(date +%j)
           DAILY_OFFSET=$(( (10#$DAY_OF_YEAR * 5) % 60 ))
           echo "📅 일별 오프셋: ${DAILY_OFFSET}분 (연중 ${DAY_OF_YEAR}일차)"
@@ -69,7 +75,7 @@ jobs:
         run: pip install anthropic requests python-dotenv google-api-python-client google-auth playwright
       - name: Playwright Chromium 설치
         run: python -m playwright install chromium --with-deps
-      - name: 글 생성 → WordPress 발행
+      - name: 글 생성 → WordPress + 네이버 발행
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           WP_URL: ${{ secrets.WP_URL }}
