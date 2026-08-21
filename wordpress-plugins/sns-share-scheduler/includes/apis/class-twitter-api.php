@@ -47,14 +47,14 @@ class SNS_Twitter_API {
         $image_data = wp_remote_get( $image_url, [ 'timeout' => 30 ] );
         if ( is_wp_error( $image_data ) ) return null;
 
-        $media_url = 'https://upload.twitter.com/1.1/media/upload.json';
-        $response  = wp_remote_post( $media_url, [
+        $media_url  = 'https://upload.twitter.com/1.1/media/upload.json';
+        $body_params = [ 'media_data' => base64_encode( wp_remote_retrieve_body( $image_data ) ) ];
+        $response    = wp_remote_post( $media_url, [
             'headers' => [
-                'Authorization' => $this->build_oauth_header( 'POST', $media_url ),
+                // Form-encoded body params must be included in the OAuth base string.
+                'Authorization' => $this->build_oauth_header( 'POST', $media_url, $body_params ),
             ],
-            'body'    => [
-                'media_data' => base64_encode( wp_remote_retrieve_body( $image_data ) ),
-            ],
+            'body'    => $body_params,
             'timeout' => 60,
         ] );
 

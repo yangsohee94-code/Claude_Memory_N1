@@ -4,7 +4,10 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class SNS_Content_Generator {
 
     public static function generate( $post_id, $platform ) {
-        $post        = get_post( $post_id );
+        $post = get_post( $post_id );
+        if ( ! $post ) {
+            return [ 'content' => '', 'image_url' => '', 'post_url' => '' ];
+        }
         $title       = $post->post_title;
         $excerpt     = self::get_clean_excerpt( $post );
         $url         = get_permalink( $post_id );

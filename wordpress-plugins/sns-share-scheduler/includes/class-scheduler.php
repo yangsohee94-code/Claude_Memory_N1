@@ -97,11 +97,11 @@ class SNS_Scheduler {
             'content'      => $content,
             'image_url'    => $data['image_url'],
             'post_url'     => $data['post_url'],
-            'scheduled_at' => date( 'Y-m-d H:i:s', $scheduled ),
+            'scheduled_at' => gmdate( 'Y-m-d H:i:s', $scheduled ),
             'status'       => 'pending',
         ] );
 
-        $local_time = get_date_from_gmt( date( 'Y-m-d H:i:s', $scheduled ), 'Y년 m월 d일 H:i' );
+        $local_time = get_date_from_gmt( gmdate( 'Y-m-d H:i:s', $scheduled ), 'Y년 m월 d일 H:i' );
         wp_send_json_success( [
             'message'      => "{$local_time}에 예약 완료",
             'scheduled_at' => $local_time,
@@ -110,6 +110,7 @@ class SNS_Scheduler {
 
     public function ajax_get_queue() {
         check_ajax_referer( 'sns_share_nonce', 'nonce' );
+        if ( ! current_user_can( 'edit_posts' ) ) wp_send_json_error( '권한이 없습니다.' );
         $post_id = intval( $_POST['post_id'] ?? 0 );
 
         global $wpdb;
@@ -139,6 +140,16 @@ class SNS_Scheduler {
 
         $id = intval( $_POST['item_id'] ?? 0 );
         global $wpdb;
+
+        // Ownership check: verify the queue item's post can be edited by the current user.
+        $item_post_id = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT post_id FROM {$wpdb->prefix}sns_share_queue WHERE id = %d",
+            $id
+        ) );
+        if ( ! $item_post_id || ! current_user_can( 'edit_post', $item_post_id ) ) {
+            wp_send_json_error( '권한이 없습니다.' );
+        }
+
         $wpdb->update(
             $wpdb->prefix . 'sns_share_queue',
             [ 'status' => 'cancelled' ],

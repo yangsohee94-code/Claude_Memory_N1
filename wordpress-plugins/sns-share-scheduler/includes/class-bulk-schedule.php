@@ -61,7 +61,7 @@ class SNS_Bulk_Schedule {
                     'content'      => $data['content'],
                     'image_url'    => $data['image_url'],
                     'post_url'     => $data['post_url'],
-                    'scheduled_at' => date( 'Y-m-d H:i:s', $slot ),
+                    'scheduled_at' => gmdate( 'Y-m-d H:i:s', $slot ),
                     'status'       => 'pending',
                 ] );
             }
