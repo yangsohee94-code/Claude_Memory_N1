@@ -19,11 +19,18 @@ class DIM_Admin {
 
         wp_enqueue_style(  'dim-style',  DIM_PLUGIN_URL . 'assets/css/dim.css', [], DIM_VERSION );
         wp_enqueue_script( 'dim-script', DIM_PLUGIN_URL . 'assets/js/dim.js', [ 'jquery' ], DIM_VERSION, true );
+        // can_convert() 는 프로브 파일을 쓰므로 transient 로 캐싱 (AJAX와 동일한 키 공유)
+        $cap = get_transient( 'dim_can_webp' );
+        if ( $cap === false ) {
+            $cap = ( new DIM_Converter() )->can_convert() ? '1' : '0';
+            set_transient( 'dim_can_webp', $cap, 5 * MINUTE_IN_SECONDS );
+        }
+
         wp_localize_script( 'dim-script', 'DIM', [
             'ajax_url'  => admin_url( 'admin-ajax.php' ),
             'admin_url' => admin_url(),
             'nonce'     => wp_create_nonce( 'dim_nonce' ),
-            'can_webp'  => ( new DIM_Converter() )->can_convert(),
+            'can_webp'  => ( $cap === '1' ),
             'cron_on'   => (bool) wp_next_scheduled( 'dim_optimize_cron' ),
             'last_run'  => get_option( 'dim_last_cron_run', '' ),
         ] );
@@ -41,10 +48,11 @@ class DIM_Admin {
         $thumbnail = new DIM_Thumbnail();
 
         // 1. WebP 변환 — 변환 후 mime_type이 webp로 바뀌므로 항상 offset=0
+        // nothing_done: converted=0 & skipped=0 & 에러만 있을 때도 무한루프 방지
         if ( $converter->can_convert() ) {
             while ( true ) {
                 $r = $converter->convert_all( 50, 0 );
-                $nothing_done = ( $r['converted'] === 0 && $r['skipped'] === 0 && empty( $r['errors'] ) );
+                $nothing_done = ( $r['converted'] === 0 && $r['skipped'] === 0 );
                 if ( ! $r['has_more'] || $nothing_done ) break;
             }
         }

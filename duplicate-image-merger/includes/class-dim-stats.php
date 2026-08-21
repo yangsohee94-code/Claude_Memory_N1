@@ -9,10 +9,17 @@ class DIM_Stats {
     public function get_storage_stats() {
         global $wpdb;
 
-        $attachments = $wpdb->get_results(
-            "SELECT ID, post_mime_type FROM {$wpdb->posts}
-             WHERE post_type = 'attachment' AND post_mime_type LIKE 'image/%'"
+        // N+1 방지: ID·MIME·파일경로를 단일 JOIN 으로 한꺼번에 가져옴
+        $rows = $wpdb->get_results(
+            "SELECT p.ID, p.post_mime_type, m.meta_value AS rel_path
+             FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->postmeta} m
+                   ON m.post_id = p.ID AND m.meta_key = '_wp_attached_file'
+             WHERE p.post_type = 'attachment'
+               AND p.post_mime_type LIKE 'image/%'"
         );
+
+        $upload_base = wp_upload_dir()['basedir'];
 
         $stats = [
             'total_count' => 0, 'total_size' => 0,
@@ -21,16 +28,17 @@ class DIM_Stats {
             'by_type'     => [],
         ];
 
-        foreach ( $attachments as $att ) {
-            $file = get_attached_file( $att->ID );
-            if ( ! $file || ! file_exists( $file ) ) continue;
+        foreach ( $rows as $row ) {
+            if ( ! $row->rel_path ) continue;
+            $file = trailingslashit( $upload_base ) . $row->rel_path;
+            if ( ! file_exists( $file ) ) continue;
             $size = (int) filesize( $file );
-            $type = str_replace( 'image/', '', $att->post_mime_type );
+            $type = str_replace( 'image/', '', $row->post_mime_type );
 
             $stats['total_count']++;
             $stats['total_size'] += $size;
 
-            if ( $att->post_mime_type === 'image/webp' ) {
+            if ( $row->post_mime_type === 'image/webp' ) {
                 $stats['webp_count']++;
                 $stats['webp_size'] += $size;
             } else {
@@ -91,25 +99,36 @@ class DIM_Stats {
     public function get_nonwebp_images( $limit = 50, $offset = 0 ) {
         global $wpdb;
 
+        // N+1 방지: 파일 경로·썸네일 URL을 JOIN 으로 한 번에 가져옴
         $rows = $wpdb->get_results( $wpdb->prepare(
-            "SELECT ID, post_title, post_mime_type, post_date
-             FROM {$wpdb->posts}
-             WHERE post_type = 'attachment'
-               AND post_mime_type IN ('image/jpeg','image/png','image/gif')
-             ORDER BY ID DESC
+            "SELECT p.ID, p.post_title, p.post_mime_type, p.post_date, p.guid,
+                    m.meta_value AS rel_path
+             FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->postmeta} m
+                   ON m.post_id = p.ID AND m.meta_key = '_wp_attached_file'
+             WHERE p.post_type = 'attachment'
+               AND p.post_mime_type IN ('image/jpeg','image/png','image/gif')
+             ORDER BY p.ID DESC
              LIMIT %d OFFSET %d",
             $limit, $offset
         ) );
 
+        $upload_base = wp_upload_dir()['basedir'];
+        $upload_url  = wp_upload_dir()['baseurl'];
+
         $items = [];
         foreach ( $rows as $row ) {
-            $file = get_attached_file( $row->ID );
+            $abs       = $row->rel_path ? trailingslashit( $upload_base ) . $row->rel_path : '';
+            $file_size = ( $abs && file_exists( $abs ) ) ? (int) filesize( $abs ) : 0;
+            $thumb_url = $row->rel_path
+                ? trailingslashit( $upload_url ) . $row->rel_path
+                : $row->guid;
             $items[] = [
                 'id'        => (int) $row->ID,
                 'title'     => $row->post_title,
                 'type'      => str_replace( 'image/', '', $row->post_mime_type ),
-                'url'       => wp_get_attachment_image_url( $row->ID, 'thumbnail' ),
-                'file_size' => ( $file && file_exists( $file ) ) ? (int) filesize( $file ) : 0,
+                'url'       => $thumb_url,
+                'file_size' => $file_size,
                 'date'      => $row->post_date,
                 'edit_url'  => get_edit_post_link( $row->ID, 'raw' ),
             ];

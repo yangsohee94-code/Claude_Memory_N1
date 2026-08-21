@@ -85,13 +85,15 @@ class DIM_Thumbnail {
      * 우선순위: ① post_content Gutenberg 블록 "id":N ② post_parent 첨부파일
      */
     public function find_first_valid_image( int $post_id ): int {
-        // ① Gutenberg 블록 "id":N 순서대로 검사
+        // ① Gutenberg 블록 "id":N 순서대로 검사 (image 블록만 대상)
         $content = get_post_field( 'post_content', $post_id );
         if ( $content ) {
-            preg_match_all( '/"id"\s*:\s*(\d+)/', $content, $m );
+            preg_match_all( '/<!-- wp:image[^>]*?"id"\s*:\s*(\d+)/', $content, $m );
             foreach ( $m[1] as $raw_id ) {
                 $id = (int) $raw_id;
-                if ( $this->attachment_file_exists( $id ) ) {
+                // 이미지 MIME 타입인지 확인 (PDF·영상 등 비이미지 제외)
+                if ( strpos( (string) get_post_mime_type( $id ), 'image/' ) === 0
+                     && $this->attachment_file_exists( $id ) ) {
                     return $id;
                 }
             }
