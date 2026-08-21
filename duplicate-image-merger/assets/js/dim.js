@@ -396,14 +396,21 @@
             var prevNt   = ntFound;
             ntFound     += d.items.length;
             d.items.forEach(function(item, i){
-                var editUrl = adminUrl+'post.php?post='+item.ID+'&action=edit';
+                var editUrl    = adminUrl+'post.php?post='+item.ID+'&action=edit';
+                var imgCnt     = item.image_count || 0;
+                var imgLabel   = imgCnt > 0 ? ('🖼 이미지 '+imgCnt+'개') : '⚠ 이미지 없음';
+                var imgClass   = imgCnt > 0 ? 'dim-muted' : 'dim-badge-unused';
+                var btnDisabled= imgCnt > 0 ? '' : 'disabled';
                 $('#dim-nothumb-list').append(tmpl
-                    .replace(/\{\{num\}\}/g,       prevNt + i + 1)
-                    .replace(/\{\{post_id\}\}/g,    item.ID)
-                    .replace(/\{\{title\}\}/g,     esc(item.post_title || '(제목 없음)'))
-                    .replace(/\{\{type\}\}/g,       item.post_type === 'page' ? '페이지' : '글')
-                    .replace(/\{\{date\}\}/g,       (item.post_date||'').slice(0,10))
-                    .replace(/\{\{edit_url\}\}/g,   editUrl)
+                    .replace(/\{\{num\}\}/g,            prevNt + i + 1)
+                    .replace(/\{\{post_id\}\}/g,         item.ID)
+                    .replace(/\{\{title\}\}/g,          esc(item.post_title || '(제목 없음)'))
+                    .replace(/\{\{type\}\}/g,            item.post_type === 'page' ? '페이지' : '글')
+                    .replace(/\{\{date\}\}/g,            (item.post_date||'').slice(0,10))
+                    .replace(/\{\{edit_url\}\}/g,        editUrl)
+                    .replace(/\{\{img_count_label\}\}/g, imgLabel)
+                    .replace(/\{\{img_count_class\}\}/g, imgClass)
+                    .replace(/\{\{thumb_btn_disabled\}\}/g, btnDisabled)
                 );
             });
 
@@ -418,17 +425,19 @@
 
     function fillAllThumbs() {
         var $prog = $('#dim-progress-fill-thumbs');
-        prog($prog, 0, 0, '썸네일 자동 설정 중...');
+        prog($prog, 0, 0, '썸네일 자동 설정 중 (시간이 걸릴 수 있습니다)...');
         $('#dim-fill-thumbs-btn').prop('disabled', true);
         post('fill_thumbnails', {}, function(err, d) {
             hideProg($prog);
             $('#dim-fill-thumbs-btn').prop('disabled', false);
-            if (err) return notice(err.message, false);
-            var msg = d.filled + '개 설정 완료';
-            if (d.skipped) msg += ' · ' + d.skipped + '개 이미지 없음';
-            if (d.truncated) msg += ' (시간 초과 — 다시 실행하면 이어서 처리됩니다)';
-            notice(msg, true);
-            if (d.filled > 0) loadNoThumb(false);
+            if (err) return notice('오류: ' + (err.message || '서버 오류'), false);
+            var total = d.total || 0;
+            var ok    = d.filled > 0 || (total > 0 && d.skipped === total);
+            var msg   = '전체 ' + total + '건 중 성공 ' + d.filled + '건';
+            if (d.skipped) msg += ' · 이미지 없음(실패) ' + d.skipped + '건';
+            if (d.truncated) msg += ' ⚠ 시간 초과 — 한 번 더 실행하면 이어서 처리됩니다';
+            notice(msg, d.filled > 0);
+            loadNoThumb(false);
         });
     }
 

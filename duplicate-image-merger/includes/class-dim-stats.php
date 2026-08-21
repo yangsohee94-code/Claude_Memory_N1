@@ -63,14 +63,16 @@ class DIM_Stats {
     public function get_posts_without_thumbnail( $limit = 50, $offset = 0 ) {
         global $wpdb;
 
+        // meta_value > 0 조건: 0/-1 등 잘못된 썸네일 ID가 남아있는 글도 목록에 포함
         $rows = $wpdb->get_results( $wpdb->prepare(
-            "SELECT p.ID, p.post_title, p.post_type, p.post_date
+            "SELECT p.ID, p.post_title, p.post_type, p.post_date, p.post_content
              FROM {$wpdb->posts} p
              WHERE p.post_type IN ('post','page')
                AND p.post_status = 'publish'
                AND p.ID NOT IN (
                    SELECT post_id FROM {$wpdb->postmeta}
                    WHERE meta_key = '_thumbnail_id'
+                   AND meta_value > 0
                )
              ORDER BY p.post_date DESC
              LIMIT %d OFFSET %d",
@@ -82,12 +84,51 @@ class DIM_Stats {
              WHERE post_type IN ('post','page')
                AND post_status = 'publish'
                AND ID NOT IN (
-                   SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_thumbnail_id'
+                   SELECT post_id FROM {$wpdb->postmeta}
+                   WHERE meta_key = '_thumbnail_id'
+                   AND meta_value > 0
                )"
         );
 
+        // 글당 이미지 수 집계: Gutenberg 블록 수 + post_parent 첨부 수의 최대값
+        $post_ids = array_column( $rows, 'ID' );
+        $att_counts = [];
+        if ( $post_ids ) {
+            $ph    = implode( ',', array_fill( 0, count( $post_ids ), '%d' ) );
+            // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+            $a_rows = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT post_parent, COUNT(*) AS cnt
+                     FROM {$wpdb->posts}
+                     WHERE post_type = 'attachment'
+                       AND post_mime_type LIKE 'image/%%'
+                       AND post_parent IN ({$ph})
+                     GROUP BY post_parent",
+                    ...$post_ids
+                )
+            );
+            foreach ( $a_rows as $ar ) {
+                $att_counts[ (int) $ar->post_parent ] = (int) $ar->cnt;
+            }
+        }
+
+        $items = [];
+        foreach ( $rows as $row ) {
+            $block_count = $row->post_content
+                ? (int) preg_match_all( '/<!-- wp:image/', $row->post_content )
+                : 0;
+            $att_count   = $att_counts[ (int) $row->ID ] ?? 0;
+            $items[] = [
+                'ID'          => $row->ID,
+                'post_title'  => $row->post_title,
+                'post_type'   => $row->post_type,
+                'post_date'   => $row->post_date,
+                'image_count' => max( $block_count, $att_count ),
+            ];
+        }
+
         return [
-            'items'    => $rows,
+            'items'    => $items,
             'total'    => $total,
             'has_more' => count( $rows ) === $limit,
         ];

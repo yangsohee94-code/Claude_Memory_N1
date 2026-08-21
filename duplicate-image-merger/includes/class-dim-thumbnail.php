@@ -101,7 +101,9 @@ class DIM_Thumbnail {
              WHERE p.post_type IN ('post','page')
                AND p.post_status = 'publish'
                AND p.ID NOT IN (
-                   SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_thumbnail_id'
+                   SELECT post_id FROM {$wpdb->postmeta}
+                   WHERE meta_key = '_thumbnail_id'
+                   AND meta_value > 0
                )
              ORDER BY p.ID ASC"
         );

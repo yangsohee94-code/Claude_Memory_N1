@@ -422,7 +422,8 @@
     <span class="dim-nt-type">{{type}}</span>
     <a href="{{edit_url}}" target="_blank"><strong>{{title}}</strong></a>
     <span class="dim-muted">{{date}}</span>
-    <button class="button button-small dim-auto-thumb-btn" data-post-id="{{post_id}}" style="margin-left:auto;">🖼 썸네일 설정</button>
+    <span class="{{img_count_class}}" style="font-size:11px;white-space:nowrap;">{{img_count_label}}</span>
+    <button class="button button-small dim-auto-thumb-btn" data-post-id="{{post_id}}" style="margin-left:auto;" {{thumb_btn_disabled}}>🖼 썸네일 설정</button>
     <span class="dim-auto-thumb-result" style="font-size:11px;"></span>
 </div>
 </script>
