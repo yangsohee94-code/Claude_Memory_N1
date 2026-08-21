@@ -140,5 +140,7 @@ def publish_to_sns(title: str, content: str, post_url: str, featured_image_url: 
         post_naver_blog(title, content, category=category)
     except ImportError:
         print("   ⏭️ 네이버 블로그: naver_post 모듈 없음, 건너뜀")
+    except RuntimeError:
+        raise  # 쿠키 만료 등 치명적 오류 → 상위로 전파 → GitHub Actions 실패 이메일 발송
     except Exception as e:
         print(f"   ⚠️ 네이버 블로그 발행 오류: {e}")

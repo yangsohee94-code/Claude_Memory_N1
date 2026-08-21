@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """네이버 블로그 자동 발행 모듈 — Playwright 기반 (봇 감지 최소화)"""
-import os, re, json, time, random, html as html_lib, base64
+import os, re, json, time, random, html as html_lib, datetime
 from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 import anthropic
@@ -28,15 +28,13 @@ _VIEWPORTS = [
 # ── webdriver 감지 차단 스크립트 ──────────────────────────────────────────────
 _STEALTH_JS = """
 () => {
-    // navigator.webdriver 숨기기
     Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
 
-    // Chrome CDP 자동화 플래그 제거
     delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
     delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
     delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
 
-    // window.chrome 주입 (headless Chromium에는 없어서 바로 감지됨)
+    // window.chrome 주입 (headless Chromium에는 없어서 즉각 감지됨)
     if (!window.chrome) {
         window.chrome = {
             app: { isInstalled: false, InstallState: {DISABLED:'disabled',INSTALLED:'installed',NOT_INSTALLED:'not_installed'}, RunningState: {CANNOT_RUN:'cannot_run',READY_TO_RUN:'ready_to_run',RUNNING:'running'} },
@@ -46,7 +44,7 @@ _STEALTH_JS = """
         };
     }
 
-    // navigator.plugins — 진짜 Chrome처럼 객체 배열로 (숫자 배열이면 바로 감지)
+    // navigator.plugins — 진짜 Chrome처럼 객체 배열로
     const pluginData = [
         { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
         { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
@@ -66,16 +64,10 @@ _STEALTH_JS = """
         }
     });
 
-    // 하드웨어 정보 (headless 기본값과 다르게)
     Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 4 });
     Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+    Object.defineProperty(navigator, 'languages', { get: () => ['ko-KR', 'ko', 'en-US', 'en'] });
 
-    // 언어 설정
-    Object.defineProperty(navigator, 'languages', {
-        get: () => ['ko-KR', 'ko', 'en-US', 'en']
-    });
-
-    // permissions query 오버라이드 (자동화 감지 패턴 차단)
     const originalQuery = window.navigator.permissions.query;
     window.navigator.permissions.query = (parameters) =>
         parameters.name === 'notifications'
@@ -138,7 +130,6 @@ NAVER_TITLE: [제목 25~35자, 홈판 노출 최적화]
 NAVER_TAGS: [태그1,태그2,태그3,태그4,태그5,태그6,태그7]
 """
 
-# 재창작 각도 — 카테고리 + 날짜 + 순번으로 선택 (같은 날 같은 각도 방지)
 _ANGLES = [
     "독자가 '나에게 해당되는가'에 집중. 조건·자격·상황별 분기를 중심으로 재창작.",
     "독자가 가장 궁금해할 '실제 비용·수치'를 중심으로 재창작. 구체적 금액과 조건 부각.",
@@ -148,17 +139,14 @@ _ANGLES = [
 ]
 
 def convert_wp_to_naver(title: str, wp_html: str, category: str = "", post_seq: int = 0) -> dict:
-    """워드프레스 HTML 본문 → 네이버 블로그 최적화 텍스트 변환"""
     plain = re.sub(r'<[^>]+>', ' ', wp_html)
     plain = html_lib.unescape(plain)
     plain = re.sub(r'[ \t]+', ' ', plain)
     plain = re.sub(r'\n{3,}', '\n\n', plain).strip()
 
-    # 카테고리 + 날짜 + 순번 조합으로 각도 선택 (같은 날/시간에 올려도 다른 각도)
-    import datetime
-    day_num = datetime.date.today().toordinal()
+    day_num  = datetime.date.today().toordinal()
     cat_hash = sum(ord(c) for c in category)
-    angle = _ANGLES[(day_num + cat_hash + post_seq) % len(_ANGLES)]
+    angle    = _ANGLES[(day_num + cat_hash + post_seq) % len(_ANGLES)]
 
     category_hint = f"\n카테고리: {category}" if category else ""
     user_msg = (
@@ -196,32 +184,13 @@ def _pause(min_s: float = 0.8, max_s: float = 2.0):
     time.sleep(random.uniform(min_s, max_s))
 
 
-def _human_move_and_click(page_or_frame, selector: str):
-    """자연스러운 마우스 이동 후 클릭"""
-    el = page_or_frame.wait_for_selector(selector, timeout=8000)
-    if not el:
-        return
-    box = el.bounding_box()
-    if not box:
-        el.click()
-        return
-    x = box["x"] + box["width"] * random.uniform(0.3, 0.7)
-    y = box["y"] + box["height"] * random.uniform(0.3, 0.7)
-    # 페이지 객체에만 mouse가 있음 (frame에는 없음)
-    if hasattr(page_or_frame, 'mouse'):
-        page_or_frame.mouse.move(x + random.randint(-40, 40), y + random.randint(-20, 20))
-        _pause(0.2, 0.5)
-        page_or_frame.mouse.move(x, y)
-        _pause(0.1, 0.3)
-        page_or_frame.mouse.click(x, y)
-    else:
-        el.click()
-
-
-def _human_type(page_or_frame, text: str):
-    """불규칙한 속도로 타이핑"""
+# 중요: Playwright에서 Frame 객체에는 .keyboard 속성이 없다.
+# .keyboard 는 Page 전용이며, 포커스된 요소가 iframe 안에 있어도 page.keyboard 로 입력하면 된다.
+# 따라서 _human_type 은 항상 page 를 받는다.
+def _human_type(page, text: str):
+    """불규칙한 속도로 타이핑 (항상 page.keyboard 사용)"""
     for ch in text:
-        page_or_frame.keyboard.type(ch)
+        page.keyboard.type(ch)
         if ch in '.!?。\n':
             time.sleep(random.uniform(0.3, 0.8))
         elif ch == ' ':
@@ -231,7 +200,6 @@ def _human_type(page_or_frame, text: str):
 
 
 def _scroll_naturally(page):
-    """페이지를 자연스럽게 스크롤"""
     for _ in range(random.randint(2, 4)):
         page.mouse.wheel(0, random.randint(200, 500))
         _pause(0.4, 1.0)
@@ -259,23 +227,26 @@ def _is_logged_in(page) -> bool:
         page.goto("https://www.naver.com", timeout=20000)
         page.wait_for_load_state("domcontentloaded", timeout=10000)
         _pause(1.5, 2.5)
-        logged = page.query_selector(".gnb_my_namebox, .MyView-module__gnb_my_name___nFkGX, #gnb-login-block")
-        if logged:
-            # 로그인 버튼이 아닌 닉네임 박스가 보여야 로그인 상태
-            login_btn = page.query_selector("#gnb-login-block")
-            if login_btn and login_btn.is_visible():
-                return False  # 로그인 버튼이 보이면 로그아웃 상태
+        # 닉네임 박스가 보이면 로그인 상태
         nickname = page.query_selector(".gnb_my_namebox, .MyView-module__gnb_my_name___nFkGX")
-        return nickname is not None and nickname.is_visible()
+        if nickname and nickname.is_visible():
+            return True
+        # 로그인 버튼이 보이면 로그아웃 상태
+        login_btn = page.query_selector("#gnb-login-block")
+        if login_btn and login_btn.is_visible():
+            return False
+        return False
     except Exception:
         return False
 
 
-# ── Smart Editor 3.0 조작 ─────────────────────────────────────────────────────
+# ── Smart Editor 3.0 프레임 탐색 ─────────────────────────────────────────────
 
 def _get_editor_frame(page):
-    """Smart Editor 3.0이 로드된 프레임 반환.
-    Naver 블로그 에디터는 <iframe id="mainFrame"> 안에 로드됨."""
+    """Smart Editor 3.0이 로드된 Frame 반환.
+    Naver 블로그 에디터는 <iframe id="mainFrame" name="mainFrame"> 안에 로드됨.
+    page.frame(name=...) 은 name 속성으로 찾으므로 name="mainFrame" 필요."""
+    # 1차: mainFrame iframe 대기
     try:
         page.wait_for_selector("iframe#mainFrame", timeout=15000)
         frame = page.frame(name="mainFrame")
@@ -285,24 +256,83 @@ def _get_editor_frame(page):
             return frame
     except Exception:
         pass
-    # fallback: contenteditable이 있는 프레임 검색
+
+    # 2차: URL 패턴으로 에디터 프레임 찾기
     for frame in page.frames:
+        if frame == page.main_frame:
+            continue
+        try:
+            if "blog.naver.com" in frame.url or "se.naver.com" in frame.url:
+                el = frame.query_selector('[contenteditable="true"]')
+                if el:
+                    print("   ℹ️ URL 패턴으로 에디터 프레임 발견")
+                    return frame
+        except Exception:
+            continue
+
+    # 3차: contenteditable 보유 프레임 탐색
+    for frame in page.frames:
+        if frame == page.main_frame:
+            continue
         try:
             el = frame.query_selector('[contenteditable="true"]')
             if el:
-                print("   ℹ️ mainFrame 대신 contenteditable 보유 프레임 사용")
+                print("   ℹ️ contenteditable 기반으로 에디터 프레임 발견")
                 return frame
         except Exception:
             continue
-    print("   ⚠️ 에디터 프레임 못 찾음, 메인 페이지로 폴백")
+
+    print("   ⚠️ 에디터 프레임 못 찾음 — 메인 페이지로 폴백")
     return page
 
 
-def _type_in_editor(frame, content: str):
-    """Smart Editor 3.0 본문 입력"""
+# ── Smart Editor 3.0 조작 (keyboard 는 항상 page 사용) ───────────────────────
+
+def _dismiss_drafts_popup(page, frame):
+    """임시저장 글 있음 팝업 처리 (있으면 '새 글 쓰기' 클릭)"""
+    try:
+        for target in [frame, page]:
+            btn = target.query_selector("button:has-text('새 글 쓰기'), button:has-text('새로 쓰기')")
+            if btn and btn.is_visible():
+                btn.click()
+                _pause(1.0, 2.0)
+                print("   ℹ️ 임시저장 팝업 닫음")
+                return
+    except Exception:
+        pass
+
+
+def _input_title(frame, page, title: str) -> bool:
+    """제목 입력 — 요소 클릭(frame)으로 포커스 후 page.keyboard로 입력"""
+    title_sels = [
+        ".se-title-input [contenteditable]",
+        ".se-title-text [contenteditable]",
+        "[placeholder='제목']",
+        ".se-title-input",
+        "#post-title",
+        "input[placeholder*='제목']",
+    ]
+    for sel in title_sels:
+        try:
+            el = frame.wait_for_selector(sel, timeout=5000)
+            if el and el.is_visible():
+                el.click()
+                _pause(0.4, 0.8)
+                page.keyboard.press("Control+a")
+                _pause(0.2, 0.3)
+                page.keyboard.press("Delete")
+                _human_type(page, title)
+                print(f"   ✅ 제목 입력 완료")
+                return True
+        except PWTimeout:
+            continue
+    return False
+
+
+def _type_in_editor(frame, page, content: str):
+    """Smart Editor 3.0 본문 입력 — 포커스(frame), 타이핑(page.keyboard)"""
     js_focus = """() => {
         const editables = Array.from(document.querySelectorAll('[contenteditable="true"]'));
-        // 제목 영역(rect.height < 80)은 제외하고 본문 영역(rect.height > 80, top > 100) 선택
         const body = editables.find(el => {
             const rect = el.getBoundingClientRect();
             return rect.height > 80 && rect.top > 100;
@@ -316,59 +346,32 @@ def _type_in_editor(frame, content: str):
     _pause(0.5, 1.0)
 
     if ok:
-        frame.keyboard.press("Control+a")
+        page.keyboard.press("Control+a")
         _pause(0.2, 0.4)
-        frame.keyboard.press("Delete")
+        page.keyboard.press("Delete")
         _pause(0.3, 0.6)
         paragraphs = content.split('\n')
         for i, para in enumerate(paragraphs):
             if para.strip():
-                _human_type(frame, para)
-            frame.keyboard.press("Enter")
+                _human_type(page, para)
+            page.keyboard.press("Enter")
             if i % 3 == 2:
                 _pause(0.8, 1.8)
             else:
                 _pause(0.2, 0.5)
     else:
-        # fallback: 중앙 클릭 후 타이핑
-        frame.keyboard.press("Tab")
+        # fallback: Tab 키로 본문 영역 포커스
+        page.keyboard.press("Tab")
         _pause(0.5, 1.0)
-        frame.keyboard.press("Control+a")
-        frame.keyboard.press("Delete")
-        _human_type(frame, content)
+        page.keyboard.press("Control+a")
+        page.keyboard.press("Delete")
+        _human_type(page, content)
 
     print(f"   ✅ 본문 입력 완료 ({len(content)}자)")
 
 
-def _input_title(frame, title: str) -> bool:
-    """제목 입력"""
-    title_sels = [
-        ".se-title-input [contenteditable]",
-        ".se-title-text",
-        "[placeholder='제목']",
-        ".se-title-input",
-        "#post-title",
-        "input[placeholder*='제목']",
-    ]
-    for sel in title_sels:
-        try:
-            el = frame.wait_for_selector(sel, timeout=5000)
-            if el:
-                el.click()
-                _pause(0.4, 0.8)
-                frame.keyboard.press("Control+a")
-                _pause(0.2, 0.3)
-                frame.keyboard.press("Delete")
-                _human_type(frame, title)
-                print(f"   ✅ 제목 입력 완료")
-                return True
-        except PWTimeout:
-            continue
-    return False
-
-
-def _input_tags(frame, tags: list):
-    """태그 입력"""
+def _input_tags(frame, page, tags: list):
+    """태그 입력 — 클릭(frame 요소), 타이핑(page.keyboard)"""
     if not tags:
         return
     tag_sels = [
@@ -385,9 +388,9 @@ def _input_tags(frame, tags: list):
                 for tag in tags[:7]:
                     inp.click()
                     _pause(0.3, 0.6)
-                    _human_type(frame, tag.strip())
+                    _human_type(page, tag.strip())
                     _pause(0.2, 0.4)
-                    frame.keyboard.press("Enter")
+                    page.keyboard.press("Enter")
                     _pause(0.4, 0.8)
                 print(f"   ✅ 태그 {len(tags[:7])}개 입력")
                 return
@@ -395,7 +398,7 @@ def _input_tags(frame, tags: list):
             continue
 
 
-def _select_category(frame, category_name: str):
+def _select_category(frame, page, category_name: str):
     """카테고리 선택"""
     if not category_name:
         return
@@ -413,10 +416,11 @@ def _select_category(frame, category_name: str):
                 try:
                     frame.select_option(sel, label=category_name)
                 except Exception:
-                    # 커스텀 드롭다운인 경우 클릭으로 시도
                     el.click()
                     _pause(0.5, 1.0)
-                    option = frame.query_selector(f"li:has-text('{category_name}'), option:has-text('{category_name}')")
+                    option = frame.query_selector(
+                        f"li:has-text('{category_name}'), option:has-text('{category_name}')"
+                    )
                     if option:
                         option.click()
                 print(f"   ✅ 카테고리: {category_name}")
@@ -426,7 +430,7 @@ def _select_category(frame, category_name: str):
 
 
 def _click_publish(page, frame) -> bool:
-    """발행 버튼 클릭 — 메인 페이지와 프레임 모두 시도"""
+    """발행 버튼 클릭 — 타임아웃을 짧게 유지해 총 대기시간 최소화"""
     publish_sels = [
         "button:has-text('발행')",
         ".btn_publish",
@@ -438,16 +442,20 @@ def _click_publish(page, frame) -> bool:
     for target in [frame, page]:
         for sel in publish_sels:
             try:
-                btn = target.wait_for_selector(sel, timeout=5000)
+                btn = target.wait_for_selector(sel, timeout=2000)  # 짧은 timeout
                 if btn and btn.is_visible():
-                    _pause(1.0, 2.5)  # 사람은 발행 전 한 번 확인함
+                    _pause(1.0, 2.5)
                     btn.click()
                     _pause(2.0, 4.0)
                     # 확인 팝업 처리
-                    for confirm_sel in ["button:has-text('확인')", "button:has-text('발행하기')", "button:has-text('등록하기')"]:
+                    for confirm_sel in [
+                        "button:has-text('확인')",
+                        "button:has-text('발행하기')",
+                        "button:has-text('등록하기')",
+                    ]:
                         try:
-                            confirm = target.wait_for_selector(confirm_sel, timeout=4000)
-                            if confirm:
+                            confirm = target.wait_for_selector(confirm_sel, timeout=3000)
+                            if confirm and confirm.is_visible():
                                 _pause(0.5, 1.0)
                                 confirm.click()
                                 _pause(2.0, 3.0)
@@ -461,7 +469,6 @@ def _click_publish(page, frame) -> bool:
 
 
 def _save_screenshot(page, naver_id: str, step: str):
-    """실패 시 스크린샷 저장 (디버깅용)"""
     try:
         screenshots_dir = Path("/tmp/naver_screenshots")
         screenshots_dir.mkdir(exist_ok=True)
@@ -476,12 +483,12 @@ def _save_screenshot(page, naver_id: str, step: str):
 # ── 단일 계정 발행 ────────────────────────────────────────────────────────────
 
 def _post_one_account(account: dict, naver_title: str, naver_content: str, naver_tags: list) -> bool:
-    naver_id  = account["id"]
-    cookies   = account.get("cookies", "")
-    blog_cat  = account.get("blog_category", "")
+    naver_id = account["id"]
+    cookies  = account.get("cookies", "")
+    blog_cat = account.get("blog_category", "")
 
-    ua        = random.choice(_USER_AGENTS)
-    viewport  = random.choice(_VIEWPORTS)
+    ua       = random.choice(_USER_AGENTS)
+    viewport = random.choice(_VIEWPORTS)
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -518,47 +525,53 @@ def _post_one_account(account: dict, naver_title: str, naver_content: str, naver
                 return False
 
             if not _is_logged_in(page):
-                print(f"   ❌ [{naver_id}] 쿠키 만료 또는 로그인 실패 — 쿠키를 새로 추출해주세요")
+                print(f"   ❌ [{naver_id}] 쿠키 만료 또는 로그인 실패")
                 _save_screenshot(page, naver_id, "login_failed")
-                # 쿠키 만료는 즉시 알아야 하므로 예외를 던져서 GitHub Actions 실패 이메일 발송
-                raise RuntimeError(f"NAVER 쿠키 만료: {naver_id} — get_naver_cookies.py 재실행 후 시크릿 업데이트 필요")
+                # RuntimeError 를 던지면 sns_post.py 에서 re-raise 되어
+                # GitHub Actions 실패 → 실패 이메일 자동 발송
+                raise RuntimeError(
+                    f"[NAVER 쿠키 만료] 계정: {naver_id} — "
+                    f"get_naver_cookies.py 재실행 후 GitHub Secrets 업데이트 필요"
+                )
 
             print(f"   ✅ [{naver_id}] 로그인 확인 (UA: Chrome/{ua.split('Chrome/')[1].split(' ')[0]})")
             _pause(1.0, 2.0)
 
-            # 2. 블로그 글쓰기 페이지 이동 (사람처럼 블로그 홈 → 글쓰기)
-            # PostWriteForm.naver 가 표준 URL
-            write_url = "https://blog.naver.com/PostWriteForm.naver"
-            page.goto(write_url, timeout=30000)
+            # 2. 글쓰기 페이지 이동
+            page.goto("https://blog.naver.com/PostWriteForm.naver", timeout=30000)
             page.wait_for_load_state("domcontentloaded", timeout=25000)
             _pause(3.0, 5.0)
             _scroll_naturally(page)
 
-            # 3. 에디터 프레임 찾기 (Smart Editor 3.0은 iframe 안에 로드됨)
+            # 3. 에디터 프레임 탐색 (Smart Editor 3.0은 iframe 안에 로드됨)
             frame = _get_editor_frame(page)
             _pause(1.0, 2.0)
 
-            # 4. 제목 입력
-            if not _input_title(frame, naver_title):
+            # 4. 임시저장 팝업 처리 (있는 경우)
+            _dismiss_drafts_popup(page, frame)
+
+            # 5. 제목 입력
+            # frame: 요소 포커스 | page: 키보드 입력 — Frame에는 .keyboard 없음
+            if not _input_title(frame, page, naver_title):
                 print(f"   ⚠️ [{naver_id}] 제목 입력 영역 못 찾음")
                 _save_screenshot(page, naver_id, "title_not_found")
                 return False
 
             _pause(1.0, 2.0)
 
-            # 5. 본문 입력
-            _type_in_editor(frame, naver_content)
+            # 6. 본문 입력
+            _type_in_editor(frame, page, naver_content)
             _pause(1.5, 3.0)
 
-            # 6. 카테고리 선택
-            _select_category(frame, blog_cat)
+            # 7. 카테고리 선택
+            _select_category(frame, page, blog_cat)
             _pause(0.5, 1.0)
 
-            # 7. 태그 입력
-            _input_tags(frame, naver_tags)
+            # 8. 태그 입력
+            _input_tags(frame, page, naver_tags)
             _pause(1.0, 2.0)
 
-            # 8. 발행
+            # 9. 발행
             if _click_publish(page, frame):
                 print(f"   ✅ [{naver_id}] 발행 완료: {naver_title}")
                 return True
@@ -568,7 +581,7 @@ def _post_one_account(account: dict, naver_title: str, naver_content: str, naver
                 return False
 
         except RuntimeError:
-            raise  # 쿠키 만료는 상위로 전파 (GitHub Actions 실패 처리)
+            raise  # 쿠키 만료 등 치명적 오류는 상위로 전파
         except Exception as e:
             print(f"   ❌ [{naver_id}] 오류: {e}")
             try:
@@ -584,7 +597,6 @@ def _post_one_account(account: dict, naver_title: str, naver_content: str, naver
 # ── 메인 발행 함수 ────────────────────────────────────────────────────────────
 
 def post_naver_blog(title: str, wp_content: str, category: str = "", post_seq: int = 0) -> bool:
-    """워드프레스 카테고리에 맞는 네이버 블로그 계정에만 발행"""
     if not category:
         print("   ⏭️ 네이버 블로그: 카테고리 없음, 건너뜀")
         return False
