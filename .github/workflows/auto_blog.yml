@@ -69,8 +69,15 @@ jobs:
           FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
           PINTEREST_ACCESS_TOKEN: ${{ secrets.PINTEREST_ACCESS_TOKEN }}
           PINTEREST_BOARD_ID: ${{ secrets.PINTEREST_BOARD_ID }}
+          # 네이버 다계정 (NAVER_ACCOUNT_N=아이디|비밀번호|카테고리)
+          NAVER_ACCOUNT_1: ${{ secrets.NAVER_ACCOUNT_1 }}
+          NAVER_ACCOUNT_2: ${{ secrets.NAVER_ACCOUNT_2 }}
+          NAVER_ACCOUNT_3: ${{ secrets.NAVER_ACCOUNT_3 }}
+          NAVER_COOKIES_1: ${{ secrets.NAVER_COOKIES_1 }}
+          NAVER_COOKIES_2: ${{ secrets.NAVER_COOKIES_2 }}
+          NAVER_COOKIES_3: ${{ secrets.NAVER_COOKIES_3 }}
+          # 단일 계정 호환 (선택)
           NAVER_ID: ${{ secrets.NAVER_ID }}
           NAVER_PW: ${{ secrets.NAVER_PW }}
           NAVER_COOKIES: ${{ secrets.NAVER_COOKIES }}
-          NAVER_BLOG_CATEGORY: ${{ secrets.NAVER_BLOG_CATEGORY }}
         run: python3 auto_blog.py

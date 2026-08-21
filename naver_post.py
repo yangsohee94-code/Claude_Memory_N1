@@ -7,11 +7,40 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-NAVER_ID       = os.getenv("NAVER_ID", "")
-NAVER_PW       = os.getenv("NAVER_PW", "")
-NAVER_COOKIES  = os.getenv("NAVER_COOKIES", "")   # JSON array, 쿠키 내보내기 값
-NAVER_CATEGORY = os.getenv("NAVER_BLOG_CATEGORY", "")  # 네이버 블로그 카테고리 이름
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+# 다계정 지원: NAVER_ACCOUNT_1 ~ NAVER_ACCOUNT_3
+# 각 계정은 "아이디|비밀번호|카테고리" 형식 (비밀번호·카테고리는 생략 가능)
+# 예) NAVER_ACCOUNT_1=yangsohee94|pw1234|연예
+#     NAVER_ACCOUNT_2=myblog2||자동차
+#     NAVER_ACCOUNT_3=myblog3||건강
+# 쿠키는 NAVER_COOKIES_1 / NAVER_COOKIES_2 / NAVER_COOKIES_3 (JSON array)
+
+def _parse_accounts() -> list[dict]:
+    """환경변수에서 네이버 계정 목록 파싱"""
+    accounts = []
+    for i in range(1, 10):  # 최대 9개 계정 지원
+        raw = os.getenv(f"NAVER_ACCOUNT_{i}", "")
+        if not raw:
+            break
+        parts = raw.split("|")
+        accounts.append({
+            "id":       parts[0].strip() if len(parts) > 0 else "",
+            "pw":       parts[1].strip() if len(parts) > 1 else "",
+            "category": parts[2].strip() if len(parts) > 2 else "",
+            "cookies":  os.getenv(f"NAVER_COOKIES_{i}", ""),
+        })
+    # 단일 계정 방식도 호환 유지 (NAVER_ID / NAVER_PW)
+    if not accounts:
+        nid = os.getenv("NAVER_ID", "")
+        if nid:
+            accounts.append({
+                "id":       nid,
+                "pw":       os.getenv("NAVER_PW", ""),
+                "category": os.getenv("NAVER_BLOG_CATEGORY", ""),
+                "cookies":  os.getenv("NAVER_COOKIES", ""),
+            })
+    return accounts
 
 # ── 네이버용 콘텐츠 변환 지침 ─────────────────────────────────────────────
 
@@ -251,24 +280,14 @@ def _click_publish(page) -> bool:
     return False
 
 
-# ── 메인 발행 함수 ────────────────────────────────────────────────────────────
+# ── 단일 계정 발행 (내부용) ──────────────────────────────────────────────────
 
-def post_naver_blog(title: str, wp_content: str, category: str = "") -> bool:
-    """워드프레스 글을 네이버 블로그에 재창작 발행"""
-    if not NAVER_ID:
-        print("   ⏭️ 네이버 블로그: NAVER_ID 미설정, 건너뜀")
-        return False
-
-    print("   🔄 네이버 블로그 변환 중...")
-    naver = convert_wp_to_naver(title, wp_content, category)
-    naver_title   = naver["title"]
-    naver_content = naver["content"]
-    naver_tags    = naver.get("tags", [])
-    print(f"   📝 네이버 제목: {naver_title}")
-
-    if not naver_content:
-        print("   ❌ 네이버 콘텐츠 변환 실패")
-        return False
+def _post_one_account(account: dict, naver_title: str, naver_content: str, naver_tags: list) -> bool:
+    """Playwright로 네이버 계정 1개에 발행"""
+    naver_id = account["id"]
+    naver_pw = account.get("pw", "")
+    cookies  = account.get("cookies", "")
+    category = account.get("category", "")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -290,38 +309,46 @@ def post_naver_blog(title: str, wp_content: str, category: str = "") -> bool:
             viewport={"width": 1280, "height": 900},
             locale="ko-KR",
         )
+
+        # 임시 객체로 NAVER_COOKIES 오버라이드
+        _orig_env = os.environ.get("NAVER_COOKIES", "")
+        os.environ["NAVER_COOKIES"] = cookies
         page = context.new_page()
 
         try:
             # 1. 로그인
-            cookie_loaded = _load_cookies(context)
-
+            cookie_loaded = _load_cookies(context) if cookies else False
             if cookie_loaded:
-                # 쿠키 유효성 확인
                 if not _is_logged_in(page):
-                    print("   ⚠️ 쿠키 만료. ID/PW 로그인 시도...")
-                    if not _login_pw(page):
-                        print("   ❌ 로그인 실패")
+                    print(f"   ⚠️ [{naver_id}] 쿠키 만료, ID/PW 시도...")
+                    _orig_id = os.environ.get("NAVER_ID", "")
+                    _orig_pw = os.environ.get("NAVER_PW", "")
+                    os.environ["NAVER_ID"] = naver_id
+                    os.environ["NAVER_PW"] = naver_pw
+                    ok = _login_pw(page)
+                    os.environ["NAVER_ID"] = _orig_id
+                    os.environ["NAVER_PW"] = _orig_pw
+                    if not ok:
                         return False
             else:
-                if not _login_pw(page):
-                    print("   ❌ 로그인 실패 — NAVER_ID/PW 또는 NAVER_COOKIES 설정 필요")
+                _orig_id = os.environ.get("NAVER_ID", "")
+                _orig_pw = os.environ.get("NAVER_PW", "")
+                os.environ["NAVER_ID"] = naver_id
+                os.environ["NAVER_PW"] = naver_pw
+                ok = _login_pw(page)
+                os.environ["NAVER_ID"] = _orig_id
+                os.environ["NAVER_PW"] = _orig_pw
+                if not ok:
                     return False
 
-            # 2. 블로그 에디터 열기
-            write_url = f"https://blog.naver.com/{NAVER_ID}/write"
-            print(f"   📂 에디터 열기: {write_url}")
+            # 2. 에디터 열기
+            write_url = f"https://blog.naver.com/{naver_id}/write"
             page.goto(write_url, timeout=30000)
             page.wait_for_load_state("networkidle", timeout=20000)
             time.sleep(3)
 
             # 3. 제목 입력
-            title_sels = [
-                ".se-title-input",
-                "#post-title",
-                "input[placeholder*='제목']",
-                ".se-ff-nanumgothic input",
-            ]
+            title_sels = [".se-title-input", "#post-title", "input[placeholder*='제목']"]
             title_ok = False
             for sel in title_sels:
                 try:
@@ -330,13 +357,11 @@ def post_naver_blog(title: str, wp_content: str, category: str = "") -> bool:
                         el.click()
                         el.fill(naver_title)
                         title_ok = True
-                        print(f"   ✅ 제목 입력 완료")
                         break
                 except PWTimeout:
                     continue
-
             if not title_ok:
-                print("   ⚠️ 제목 입력 영역을 찾지 못했습니다")
+                print(f"   ⚠️ [{naver_id}] 제목 입력 실패")
                 return False
 
             time.sleep(1)
@@ -344,24 +369,58 @@ def post_naver_blog(title: str, wp_content: str, category: str = "") -> bool:
             # 4. 본문 입력
             _type_in_editor(page, naver_content)
             time.sleep(1)
-            print(f"   ✅ 본문 입력 완료 ({len(naver_content)}자)")
 
-            # 5. 카테고리 선택
-            _select_category(page, NAVER_CATEGORY)
+            # 5. 카테고리
+            _select_category(page, category)
 
-            # 6. 태그 입력
+            # 6. 태그
             _input_tags(page, naver_tags)
 
             # 7. 발행
             if _click_publish(page):
-                print(f"   ✅ 네이버 블로그 발행 완료: {naver_title}")
+                print(f"   ✅ [{naver_id}] 발행 완료")
                 return True
             else:
-                print("   ⚠️ 발행 버튼을 찾지 못했습니다")
+                print(f"   ⚠️ [{naver_id}] 발행 버튼 못 찾음")
                 return False
 
         except Exception as e:
-            print(f"   ❌ 네이버 블로그 발행 오류: {e}")
+            print(f"   ❌ [{naver_id}] 오류: {e}")
             return False
         finally:
+            os.environ["NAVER_COOKIES"] = _orig_env
             browser.close()
+
+
+# ── 메인 발행 함수 (다계정) ───────────────────────────────────────────────────
+
+def post_naver_blog(title: str, wp_content: str, category: str = "") -> bool:
+    """워드프레스 글을 네이버 전체 계정에 재창작 발행"""
+    accounts = _parse_accounts()
+    if not accounts:
+        print("   ⏭️ 네이버 블로그: 계정 미설정, 건너뜀")
+        print("      → NAVER_ACCOUNT_1=아이디|비밀번호|카테고리 형식으로 설정하세요")
+        return False
+
+    print(f"   🔄 네이버 변환 중... (계정 {len(accounts)}개)")
+    naver = convert_wp_to_naver(title, wp_content, category)
+    naver_title   = naver["title"]
+    naver_content = naver["content"]
+    naver_tags    = naver.get("tags", [])
+    print(f"   📝 네이버 제목: {naver_title}")
+
+    if not naver_content:
+        print("   ❌ 네이버 콘텐츠 변환 실패")
+        return False
+
+    results = []
+    for i, account in enumerate(accounts, 1):
+        print(f"\n   📌 계정 {i}/{len(accounts)}: {account['id']}")
+        ok = _post_one_account(account, naver_title, naver_content, naver_tags)
+        results.append(ok)
+        if i < len(accounts):
+            time.sleep(5)  # 계정 간 딜레이 (봇 감지 방지)
+
+    success = sum(results)
+    print(f"\n   📊 네이버 발행 결과: {success}/{len(accounts)} 계정 성공")
+    return success > 0
