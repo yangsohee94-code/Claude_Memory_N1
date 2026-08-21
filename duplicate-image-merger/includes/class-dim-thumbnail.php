@@ -191,10 +191,11 @@ class DIM_Thumbnail {
         }
 
         // 파일 존재 여부 + 크기 (픽셀 동점 시 보조 기준)
+        // _wp_attached_file 이 절대경로로 잘못 저장된 경우도 방어적으로 처리
         $att_valid = [];
         foreach ( $att_ids as $aid ) {
             $rel = $att_file[ $aid ] ?? '';
-            $abs = $rel ? $upload_base . $rel : '';
+            $abs = dim_resolve_upload_path( $rel );
             if ( $abs && file_exists( $abs ) ) {
                 $att_valid[ $aid ] = true;
                 $att_fsize[ $aid ] = (int) filesize( $abs );

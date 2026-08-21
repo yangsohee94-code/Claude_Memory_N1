@@ -143,4 +143,22 @@
 
     register( 'dim-image-manager', { render: DimImagePanel, icon: 'format-image' } );
 
+    // 편집기 로드 후 "글" 탭(Document panel)을 기본으로 표시
+    (function () {
+        var done = false;
+        var unsub = wp.data.subscribe( function () {
+            if ( done ) return;
+            var postId = wp.data.select( 'core/editor' ) && wp.data.select( 'core/editor' ).getCurrentPostId();
+            if ( ! postId ) return;
+            done = true;
+            unsub();
+            try {
+                var ep = wp.data.dispatch( 'core/edit-post' ) || wp.data.dispatch( 'core/editor' );
+                if ( ep && ep.openGeneralSidebar ) {
+                    ep.openGeneralSidebar( 'edit-post/document' );
+                }
+            } catch ( e ) {}
+        } );
+    }() );
+
 }( jQuery ) );

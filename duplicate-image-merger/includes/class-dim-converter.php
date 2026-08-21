@@ -119,8 +119,9 @@ class DIM_Converter {
             $new_url = $base_url . $webp_rel;
 
             // ③ 직접 DB 업데이트 — wp_update_post() 훅 미발동 (save_post 없음)
+            // _wp_attached_file 은 상대경로를 저장해야 함 (WordPress 표준)
             $wpdb->update( $wpdb->posts,    [ 'post_mime_type' => 'image/webp' ], [ 'ID' => $id ], [ '%s' ], [ '%d' ] );
-            $wpdb->update( $wpdb->postmeta, [ 'meta_value' => $webp_file ],
+            $wpdb->update( $wpdb->postmeta, [ 'meta_value' => $webp_rel ],
                 [ 'post_id' => $id, 'meta_key' => '_wp_attached_file' ], [ '%s' ], [ '%d', '%s' ] );
 
             // ④ 사전 로드된 메타에서 file 키만 교체 — wp_get_attachment_metadata() 쿼리 없음
@@ -196,8 +197,9 @@ class DIM_Converter {
         $rel_path = ltrim( str_replace( trailingslashit( $upload['basedir'] ), '', $webp_file ), '/' );
 
         // wp_update_post() → 직접 DB 업데이트 (save_post 훅 미발동)
+        // _wp_attached_file 은 상대경로를 저장해야 함 (WordPress 표준)
         $wpdb->update( $wpdb->posts,    [ 'post_mime_type' => 'image/webp' ], [ 'ID' => $id ], [ '%s' ], [ '%d' ] );
-        $wpdb->update( $wpdb->postmeta, [ 'meta_value' => $webp_file ],
+        $wpdb->update( $wpdb->postmeta, [ 'meta_value' => $rel_path ],
             [ 'post_id' => $id, 'meta_key' => '_wp_attached_file' ], [ '%s' ], [ '%d', '%s' ] );
 
         $meta = wp_get_attachment_metadata( $id );

@@ -3,7 +3,7 @@
  * Plugin Name: Duplicate Image Merger
  * Plugin URI:  https://github.com/yangsohee94-code/claude_memory_n1
  * Description: 중복 이미지 병합 · WebP 변환 · 대표이미지 정합성 자동 최적화
- * Version:     1.3.30
+ * Version:     1.3.31
  * Author:      Claude Memory N1
  * License:     GPL-2.0+
  * Text Domain: duplicate-image-merger
@@ -11,9 +11,19 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'DIM_VERSION',    '1.3.30' );
+define( 'DIM_VERSION',    '1.3.31' );
 define( 'DIM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DIM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+
+/**
+ * _wp_attached_file 메타가 절대경로로 저장된 경우를 방어적으로 처리
+ * (이전 버전 변환기의 버그로 절대경로가 저장될 수 있음 → 상대경로로 자동 변환)
+ */
+function dim_resolve_upload_path( string $rel_or_abs ): string {
+    if ( ! $rel_or_abs ) return '';
+    if ( strpos( $rel_or_abs, '/' ) === 0 ) return $rel_or_abs; // 이미 절대경로
+    return trailingslashit( wp_upload_dir()['basedir'] ) . $rel_or_abs;
+}
 
 foreach ( [ 'scanner', 'converter', 'thumbnail', 'stats', 'admin', 'ajax' ] as $c ) {
     require_once DIM_PLUGIN_DIR . "includes/class-dim-{$c}.php";

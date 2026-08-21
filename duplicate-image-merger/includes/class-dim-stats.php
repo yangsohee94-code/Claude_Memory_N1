@@ -30,7 +30,7 @@ class DIM_Stats {
 
         foreach ( $rows as $row ) {
             if ( ! $row->rel_path ) continue;
-            $file = trailingslashit( $upload_base ) . $row->rel_path;
+            $file = dim_resolve_upload_path( $row->rel_path );
             if ( ! file_exists( $file ) ) continue;
             $size = (int) filesize( $file );
             $type = str_replace( 'image/', '', $row->post_mime_type );
@@ -159,7 +159,7 @@ class DIM_Stats {
 
         $items = [];
         foreach ( $rows as $row ) {
-            $abs       = $row->rel_path ? trailingslashit( $upload_base ) . $row->rel_path : '';
+            $abs       = dim_resolve_upload_path( $row->rel_path ?? '' );
             $file_size = ( $abs && file_exists( $abs ) ) ? (int) filesize( $abs ) : 0;
             $thumb_url = $row->rel_path
                 ? trailingslashit( $upload_url ) . $row->rel_path
@@ -363,7 +363,7 @@ class DIM_Stats {
                 if ( $row->rel_path ) {
                     $att_names[ $att_id ] = basename( $row->rel_path );
                 }
-                $abs = $row->rel_path ? trailingslashit( $upload_base ) . $row->rel_path : '';
+                $abs = dim_resolve_upload_path( $row->rel_path ?? '' );
                 if ( ! $abs || ! file_exists( $abs ) ) {
                     foreach ( $att_to_posts[ $att_id ] ?? [] as $post_id ) {
                         $broken_post_ids[ $post_id ]    = true;
@@ -565,9 +565,7 @@ class DIM_Stats {
         $upload_base = wp_upload_dir()['basedir'];
         $items = [];
         foreach ( $rows as $row ) {
-            $abs = $row->rel_path
-                ? trailingslashit( $upload_base ) . $row->rel_path
-                : '';
+            $abs = dim_resolve_upload_path( $row->rel_path ?? '' );
             if ( $abs && file_exists( $abs ) ) continue;
 
             $name = $row->rel_path
@@ -656,7 +654,7 @@ class DIM_Stats {
                     )
                 );
                 foreach ( $rows as $row ) {
-                    $abs = $row->rel_path ? trailingslashit( $upload_base ) . $row->rel_path : '';
+                    $abs = dim_resolve_upload_path( $row->rel_path ?? '' );
                     if ( $abs && file_exists( $abs ) ) {
                         $valid_ids[ (int) $row->ID ] = true;
                     }
@@ -742,7 +740,7 @@ class DIM_Stats {
         foreach ( $rows as $row ) {
             $id          = (int) $row->ID;
             $found[ $id ] = true;
-            $abs = $row->rel_path ? trailingslashit( $upload_base ) . $row->rel_path : '';
+            $abs = dim_resolve_upload_path( $row->rel_path ?? '' );
             if ( ! $abs || ! file_exists( $abs ) ) {
                 $name     = $row->rel_path
                     ? basename( $row->rel_path )
