@@ -536,43 +536,60 @@ class DIM_Stats {
         $upload_base    = wp_upload_dir()['basedir'];
         $posts_updated  = 0;
         $blocks_removed = 0;
-        $offset         = 0;
-        $batch          = 50;
+        $start_time     = microtime( true );
 
-        // ① wp:image 블록이 있는 글을 50개씩 배치 처리 (OOM 방지)
-        do {
-            $posts = $wpdb->get_results( $wpdb->prepare(
-                "SELECT ID, post_content FROM {$wpdb->posts}
-                 WHERE post_status = 'publish'
-                   AND post_type IN ('post','page')
-                   AND post_content LIKE '%%<!-- wp:image%%'
-                 LIMIT %d OFFSET %d",
-                $batch, $offset
-            ) );
+        // ① 대상 post ID 목록을 먼저 수집 (내용 변경으로 LIKE 조건이 바뀌어도 OFFSET이 흔들리지 않음)
+        $post_ids = $wpdb->get_col(
+            "SELECT ID FROM {$wpdb->posts}
+             WHERE post_status = 'publish'
+               AND post_type IN ('post','page')
+               AND post_content LIKE '%<!-- wp:image%'
+             ORDER BY ID ASC"
+        );
+        if ( empty( $post_ids ) ) {
+            return [ 'posts_updated' => 0, 'blocks_removed' => 0, 'truncated' => false ];
+        }
 
-            if ( empty( $posts ) ) break;
+        // ② 안정적인 ID 기반 배치 처리 (50개씩)
+        // 부정형 전방탐색 (?!-->) — Gutenberg 블록 오프너는 한 줄이므로 JSON 중첩 깊이 무관하게 매칭
+        $block_pattern = '/<!-- wp:image ((?:(?!-->).)+?)\s*\/?\s*-->.*?<!-- \/wp:image -->/s';
 
-            // ② wp:image 블록 오프너에서만 ID 추출 (다른 블록의 id 오염 방지)
+        foreach ( array_chunk( $post_ids, 50 ) as $chunk ) {
+            // 300초 제한 중 260초 경과 시 안전하게 중단하고 부분 결과 반환
+            if ( microtime( true ) - $start_time > 260 ) {
+                return [
+                    'posts_updated'  => $posts_updated,
+                    'blocks_removed' => $blocks_removed,
+                    'truncated'      => true,
+                ];
+            }
+
+            $ph    = implode( ',', array_fill( 0, count( $chunk ), '%d' ) );
+            // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+            $posts = $wpdb->get_results(
+                $wpdb->prepare( "SELECT ID, post_content FROM {$wpdb->posts} WHERE ID IN ({$ph})", ...$chunk )
+            );
+            if ( empty( $posts ) ) continue;
+
+            // ③ 이 배치에서 참조된 이미지 ID만 추출 (wp:image 오프너 내부만)
             $all_ids = [];
             foreach ( $posts as $p ) {
-                // 블록 오프너 JSON 부분만 대상으로 매칭
-                if ( preg_match_all( '/<!-- wp:image \{[^>]*?"id":(\d+)/i', $p->post_content, $m ) ) {
+                if ( preg_match_all( '/<!-- wp:image (?:(?!-->).)*?"id":(\d+)/i', $p->post_content, $m ) ) {
                     foreach ( $m[1] as $id ) $all_ids[] = (int) $id;
                 }
             }
 
             $valid_ids = [];
             if ( ! empty( $all_ids ) ) {
-                $all_ids      = array_unique( $all_ids );
-                $placeholders = implode( ',', array_fill( 0, count( $all_ids ), '%d' ) );
+                $all_ids = array_unique( $all_ids );
+                $iph     = implode( ',', array_fill( 0, count( $all_ids ), '%d' ) );
                 // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
                 $rows = $wpdb->get_results(
                     $wpdb->prepare(
                         "SELECT p.ID, m.meta_value AS rel_path
                          FROM {$wpdb->posts} p
                          LEFT JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = '_wp_attached_file'
-                         WHERE p.ID IN ({$placeholders})
-                           AND p.post_type = 'attachment'",
+                         WHERE p.ID IN ({$iph}) AND p.post_type = 'attachment'",
                         ...$all_ids
                     )
                 );
@@ -584,10 +601,7 @@ class DIM_Stats {
                 }
             }
 
-            // ③ 각 글에서 엑박 블록 제거
-            // JSON 중첩 2단계까지 처리: \{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}
-            $block_pattern = '/<!-- wp:image (\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})(?:\s+[a-z\/]+)?\s*-->.*?<!-- \/wp:image -->/s';
-
+            // ④ 각 글에서 엑박 블록 제거
             foreach ( $posts as $p ) {
                 $removed     = 0;
                 $new_content = preg_replace_callback(
@@ -604,24 +618,29 @@ class DIM_Stats {
                     $p->post_content
                 );
 
-                // preg_replace_callback 실패(null) 또는 변경 없으면 건너뜀
                 if ( $new_content === null || $removed === 0 ) continue;
 
-                // wp_update_post → post_modified 자동 갱신 + 캐시 정리
-                wp_update_post( [
-                    'ID'           => $p->ID,
-                    'post_content' => $new_content,
-                ] );
+                // $wpdb->update + 명시적 post_modified 갱신 → save_post 훅 미발동
+                $now     = current_time( 'mysql' );
+                $now_gmt = current_time( 'mysql', 1 );
+                $wpdb->update(
+                    $wpdb->posts,
+                    [
+                        'post_content'      => $new_content,
+                        'post_modified'     => $now,
+                        'post_modified_gmt' => $now_gmt,
+                    ],
+                    [ 'ID' => $p->ID ],
+                    [ '%s', '%s', '%s' ],
+                    [ '%d' ]
+                );
+                clean_post_cache( $p->ID );
                 $posts_updated++;
                 $blocks_removed += $removed;
             }
+        }
 
-            $offset  += $batch;
-            $has_more = count( $posts ) === $batch;
-
-        } while ( $has_more );
-
-        return [ 'posts_updated' => $posts_updated, 'blocks_removed' => $blocks_removed ];
+        return [ 'posts_updated' => $posts_updated, 'blocks_removed' => $blocks_removed, 'truncated' => false ];
     }
 
     /**

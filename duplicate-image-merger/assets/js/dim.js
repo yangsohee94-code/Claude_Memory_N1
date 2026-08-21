@@ -672,9 +672,15 @@
         .done(function(r) {
             hideProg($prog);
             $btn.prop('disabled', false).text('🧹 엑박 블록 글에서 자동 제거');
+            // PHP가 set_time_limit 초과 등으로 비JSON을 반환하면 r이 문자열일 수 있음
+            if (typeof r !== 'object' || r === null) {
+                notice('서버 응답 오류 (PHP 시간 초과 가능성)', false); return;
+            }
             if (!r.success) { notice((r.data && r.data.message) || '처리 실패', false); return; }
             var d = r.data;
-            notice(d.posts_updated + '개 글에서 엑박 블록 ' + d.blocks_removed + '개 제거 완료', true);
+            var msg = d.posts_updated + '개 글에서 엑박 블록 ' + d.blocks_removed + '개 제거 완료';
+            if (d.truncated) msg += ' (용량이 커서 일부 처리됨 — 다시 실행하세요)';
+            notice(msg, !d.truncated);
             if (d.posts_updated > 0) { loadBrokenImgPosts(false); }
         })
         .fail(function(xhr, status) {
