@@ -3,7 +3,7 @@
  * Plugin Name: Duplicate Image Merger
  * Plugin URI:  https://github.com/yangsohee94-code/claude_memory_n1
  * Description: 중복 이미지 병합 · WebP 변환 · 대표이미지 정합성 자동 최적화
- * Version:     1.3.13
+ * Version:     1.3.14
  * Author:      Claude Memory N1
  * License:     GPL-2.0+
  * Text Domain: duplicate-image-merger
@@ -11,7 +11,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'DIM_VERSION',    '1.3.13' );
+define( 'DIM_VERSION',    '1.3.14' );
 define( 'DIM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DIM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -24,20 +24,31 @@ add_action( 'plugins_loaded', function () {
     ( new DIM_Ajax()  )->init();
 } );
 
-// ── 업로드 파일명 충돌 방지 ─────────────────────────────────────────
-// maxresdefault.jpg 같이 중복되기 쉬운 이름에 콘텐츠 해시(8자)를 붙여
-// 기존 미디어와 혼재되지 않도록 한다.
+// ── 업로드 파일명 자동 변경 ─────────────────────────────────────────
+// 관리자 "업로드 설정" 탭에서 접두사를 지정하면 nightlab_1.jpg 형태로 자동 변경.
+// 기능 OFF 시에는 해시 접미사(-xxxxxxxx)를 붙여 파일명 충돌만 방지한다.
 add_filter( 'wp_handle_upload_prefilter', function ( $file ) {
-    // 이미지 업로드만 처리
     if ( strpos( $file['type'] ?? '', 'image/' ) !== 0 ) return $file;
 
-    $tmp  = $file['tmp_name'] ?? '';
-    $hash = $tmp && file_exists( $tmp ) ? substr( md5_file( $tmp ), 0, 8 ) : substr( md5( uniqid( '', true ) ), 0, 8 );
+    $info = pathinfo( $file['name'] );
+    $ext  = isset( $info['extension'] ) ? '.' . strtolower( $info['extension'] ) : '';
 
-    $info        = pathinfo( $file['name'] );
-    $ext         = isset( $info['extension'] ) ? '.' . strtolower( $info['extension'] ) : '';
-    $base        = sanitize_file_name( $info['filename'] );
-    $file['name'] = $base . '-' . $hash . $ext;
+    if ( get_option( 'dim_upload_rename_enabled', false ) ) {
+        // 접두사 + 업로드날짜 + 순번 모드
+        $prefix  = get_option( 'dim_upload_prefix', 'image' );
+        $counter = (int) get_option( 'dim_upload_counter', 1 );
+        update_option( 'dim_upload_counter', $counter + 1 );
+        $date         = date( 'Ymd' );
+        $file['name'] = $prefix . '_' . $date . '_' . $counter . $ext;
+    } else {
+        // 충돌 방지 해시 모드 (기본)
+        $tmp  = $file['tmp_name'] ?? '';
+        $hash = $tmp && file_exists( $tmp )
+            ? substr( md5_file( $tmp ), 0, 8 )
+            : substr( md5( uniqid( '', true ) ), 0, 8 );
+        $base         = sanitize_file_name( $info['filename'] );
+        $file['name'] = $base . '-' . $hash . $ext;
+    }
 
     return $file;
 } );

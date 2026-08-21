@@ -1061,6 +1061,60 @@
         // 탭 ⑦ H2 아래 이미지 없는 글
         $('#dim-scan-h2noimg-btn').on('click', function(){ loadH2NoImgPosts(false); });
         $('#dim-h2noimg-more-btn').on('click', function(){ loadH2NoImgPosts(true); });
+
+        // 탭 ⑧ 업로드 설정
+        function updateUploadPreview() {
+            var enabled = $('#dim-upload-rename-toggle').is(':checked');
+            var prefix  = $.trim($('#dim-upload-prefix').val()) || 'image';
+            var counter = parseInt($('#dim-upload-counter').val()) || 1;
+            if (enabled) {
+                var today = new Date();
+                var d = today.getFullYear() + ('0'+(today.getMonth()+1)).slice(-2) + ('0'+today.getDate()).slice(-2);
+                $('#dim-upload-preview-text').text(prefix + '_' + d + '_' + counter + '.jpg  /  ' + prefix + '_' + d + '_' + (counter+1) + '.jpg  ...');
+                $('#dim-upload-preview').show();
+            } else {
+                $('#dim-upload-preview').hide();
+            }
+        }
+
+        post('get_upload_settings', {}, function(err, d) {
+            if (err) return;
+            $('#dim-upload-rename-toggle').prop('checked', d.enabled);
+            $('#dim-upload-prefix').val(d.prefix);
+            $('#dim-upload-counter').val(d.counter);
+            $('#dim-upload-rename-label').text(d.enabled ? '파일명 자동 변경 켜짐' : '파일명 자동 변경 꺼짐 (충돌 방지 해시만 적용)');
+            $('#dim-upload-rename-settings').toggle(d.enabled);
+            updateUploadPreview();
+        });
+
+        $('#dim-upload-rename-toggle').on('change', function(){
+            var on = this.checked;
+            $('#dim-upload-rename-label').text(on ? '파일명 자동 변경 켜짐' : '파일명 자동 변경 꺼짐 (충돌 방지 해시만 적용)');
+            $('#dim-upload-rename-settings').toggle(on);
+            updateUploadPreview();
+        });
+        $('#dim-upload-prefix, #dim-upload-counter').on('input', updateUploadPreview);
+
+        $('#dim-upload-save-btn').on('click', function(){
+            var $btn    = $(this);
+            var $result = $('#dim-upload-save-result');
+            $btn.prop('disabled', true);
+            post('save_upload_settings', {
+                enabled: $('#dim-upload-rename-toggle').is(':checked') ? 1 : 0,
+                prefix:  $.trim($('#dim-upload-prefix').val()),
+                counter: $('#dim-upload-counter').val()
+            }, function(err, d){
+                $btn.prop('disabled', false);
+                if (err) {
+                    $result.css('color','#d63638').text('✖ ' + (err.message || '저장 실패'));
+                } else {
+                    $result.css('color','#00a32a').text('✔ 저장됨');
+                    $('#dim-upload-counter').val(d.counter);
+                    updateUploadPreview();
+                    setTimeout(function(){ $result.text(''); }, 2500);
+                }
+            });
+        });
     });
 
 }(jQuery));

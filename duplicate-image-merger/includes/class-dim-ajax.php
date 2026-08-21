@@ -9,6 +9,7 @@ class DIM_Ajax {
             'schedule', 'get_counts',
             'get_stats', 'get_no_thumb_posts', 'get_nonwebp', 'delete_images', 'scan_unused',
             'get_broken_img_posts', 'get_h2_no_img_posts', 'crop_image', 'auto_set_thumb',
+            'get_upload_settings', 'save_upload_settings',
         ];
         foreach ( $actions as $a ) {
             add_action( "wp_ajax_dim_{$a}", [ $this, "handle_{$a}" ] );
@@ -105,6 +106,36 @@ class DIM_Ajax {
     public function handle_fix_thumbnails() {
         $this->auth();
         wp_send_json_success( ( new DIM_Thumbnail() )->fix_all() );
+    }
+
+    public function handle_get_upload_settings() {
+        $this->auth();
+        wp_send_json_success( [
+            'enabled' => (bool) get_option( 'dim_upload_rename_enabled', false ),
+            'prefix'  => get_option( 'dim_upload_prefix', '' ),
+            'counter' => (int) get_option( 'dim_upload_counter', 1 ),
+        ] );
+    }
+
+    public function handle_save_upload_settings() {
+        $this->auth();
+        $enabled = filter_var( $_POST['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN );
+        $prefix  = sanitize_title_with_dashes( $_POST['prefix'] ?? '' );
+        $counter = max( 1, absint( $_POST['counter'] ?? 1 ) );
+
+        if ( $enabled && empty( $prefix ) ) {
+            wp_send_json_error( [ 'message' => '접두사를 입력하세요.' ] );
+        }
+
+        update_option( 'dim_upload_rename_enabled', $enabled );
+        update_option( 'dim_upload_prefix',         $prefix );
+        update_option( 'dim_upload_counter',        $counter );
+
+        wp_send_json_success( [
+            'enabled' => $enabled,
+            'prefix'  => $prefix,
+            'counter' => $counter,
+        ] );
     }
 
     public function handle_auto_set_thumb() {

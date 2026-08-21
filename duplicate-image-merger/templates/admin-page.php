@@ -11,6 +11,7 @@
         <button class="dim-tab" data-tab="unused">미사용 이미지</button>
         <button class="dim-tab" data-tab="brokenimg">이미지 오류 글</button>
         <button class="dim-tab" data-tab="h2noimg">H2 이미지 누락</button>
+        <button class="dim-tab" data-tab="upload">업로드 설정</button>
     </div>
 
     <!-- ① 중복 이미지 탭 -->
@@ -243,6 +244,58 @@
         <div id="dim-h2noimg-more-wrap" style="display:none;text-align:center;margin:12px 0;">
             <button id="dim-h2noimg-more-btn" class="button">더 보기</button>
         </div>
+    </div>
+
+    <!-- ⑧ 업로드 설정 탭 -->
+    <div class="dim-tab-content" id="dim-tab-upload">
+
+        <div class="dim-panel">
+            <h2>📁 업로드 파일명 자동 변경</h2>
+            <p class="dim-panel-desc">
+                이미지 업로드 시 파일명을 지정한 접두사 + 번호로 자동 변경합니다.<br>
+                예) 접두사 <code>nightlab</code> → <code>nightlab_1.jpg</code>, <code>nightlab_2.jpg</code>, ...
+            </p>
+
+            <div class="dim-panel-row" style="align-items:center;gap:16px;flex-wrap:wrap;">
+                <label class="dim-toggle" title="파일명 자동 변경 ON/OFF">
+                    <input type="checkbox" id="dim-upload-rename-toggle">
+                    <span class="dim-toggle-slider"></span>
+                </label>
+                <span id="dim-upload-rename-label" style="font-weight:500;">불러오는 중...</span>
+            </div>
+
+            <div id="dim-upload-rename-settings" style="margin-top:14px;display:none;">
+                <table class="form-table" style="max-width:520px;">
+                    <tr>
+                        <th style="padding:6px 10px 6px 0;white-space:nowrap;">접두사</th>
+                        <td>
+                            <input type="text" id="dim-upload-prefix" class="regular-text"
+                                placeholder="예: nightlab" maxlength="40"
+                                style="width:200px;">
+                            <p class="description" style="margin-top:4px;">영문·숫자·하이픈·언더스코어만 사용 가능</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th style="padding:6px 10px 6px 0;">다음 번호</th>
+                        <td>
+                            <input type="number" id="dim-upload-counter" min="1" value="1"
+                                style="width:100px;">
+                            <p class="description" style="margin-top:4px;">다음 업로드부터 이 번호로 시작</p>
+                        </td>
+                    </tr>
+                </table>
+                <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                    <button id="dim-upload-save-btn" class="button button-primary">💾 저장</button>
+                    <span id="dim-upload-save-result" style="font-size:13px;"></span>
+                </div>
+            </div>
+
+            <div id="dim-upload-preview" style="margin-top:14px;display:none;">
+                <span class="dim-muted">다음 업로드 파일명 미리보기: </span>
+                <code id="dim-upload-preview-text" style="font-size:13px;font-weight:600;"></code>
+            </div>
+        </div>
+
     </div>
 
     <!-- 전체 알림 -->
