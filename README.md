@@ -1,39 +1,71 @@
-# NotebookLM 목록
+# Claude_Memory_N1
 
-Google Drive API를 통해 NotebookLM 노트북 목록을 조회하는 웹 앱입니다.
+수익형 블로그 자동화 + WordPress 플러그인 모음
 
-## 사용 방법
+## 구조
 
-### 1. Google Cloud Console 설정
-
-1. [Google Cloud Console](https://console.cloud.google.com)에서 새 프로젝트를 만들거나 기존 프로젝트를 선택합니다.
-2. **API 및 서비스 > 라이브러리**에서 **Google Drive API**를 활성화합니다.
-3. **API 및 서비스 > 사용자 인증 정보**에서 **OAuth 2.0 클라이언트 ID**를 생성합니다.
-   - 애플리케이션 유형: **웹 애플리케이션**
-   - 승인된 자바스크립트 원본: 앱을 서비스하는 URL (예: `http://localhost:8080`)
-4. 생성된 클라이언트 ID를 복사합니다.
-
-### 2. 앱 실행
-
-```bash
-# 로컬 서버로 실행 (예시)
-python3 -m http.server 8080
+```
+.
+├── auto_blog.py              # 메인 자동화: Claude 글 생성 → WP 발행 → SNS 발행
+├── sns_post.py               # SNS 발행 모듈 (Threads / Facebook / Pinterest)
+├── wp_merge_duplicate_images.py  # WordPress 중복 이미지 정리 유틸리티
+├── requirements.txt
+│
+├── prompts/                  # 카테고리별 프롬프트 (글 작성 지침)
+├── topics/                   # 카테고리별 주제 목록
+├── references/               # 카테고리별 참고 자료
+│
+├── duplicate-image-merger/   # WordPress 플러그인: 중복 이미지 통합
+├── quick-image-insert/       # WordPress 플러그인: 빠른 이미지 삽입
+├── sns-share-scheduler/      # WordPress 플러그인: SNS 예약 발행
+│
+└── index.html                # NotebookLM 노트북 목록 뷰어 (구글 드라이브 API 사용)
 ```
 
-브라우저에서 `http://localhost:8080`을 열고:
-1. 클라이언트 ID를 입력 후 저장
-2. **Google 로그인** 버튼 클릭
-3. 권한 승인 후 NotebookLM 노트북 목록 확인
+## 블로그 자동화 사용법
 
-## 동작 원리
+### 환경변수 설정 (.env)
 
-NotebookLM은 Google Drive에 파일을 저장할 때 전용 MIME 타입(`application/vnd.google-apps.drive-sdk.720312581700`)을 사용합니다.  
-이 앱은 Drive API로 해당 MIME 타입의 파일만 필터링하여 목록으로 표시합니다.
+```env
+ANTHROPIC_API_KEY=...
+WP_URL=https://your-site.com
+WP_USERNAME=...
+WP_APP_PASSWORD=...
+CATEGORY=entertainment   # car / entertainment / health / sports / 재테크 / 등
 
-## 기능
+# 카테고리 ID (WP)
+WP_CAT_ENTERTAINMENT_POP=44
+WP_CAT_ENTERTAINMENT_DRAMA=43
+WP_CAT_HEALTH_DIET=47
+WP_CAT_HEALTH_INFO=48
+WP_CAT_CAR=29
 
-- Google OAuth 2.0 인증
-- NotebookLM 노트북 목록 조회 및 표시
-- 노트북 이름 검색 필터
-- 클릭 시 NotebookLM에서 바로 열기
-- 라이트/다크 모드 자동 지원
+# Google Drive (사진 첨부, 선택)
+GOOGLE_CREDENTIALS=...
+GOOGLE_DRIVE_ROOT_FOLDER_ID=...
+
+# SNS (선택)
+THREADS_USER_ID=...
+THREADS_ACCESS_TOKEN=...
+FB_PAGE_ID=...
+FB_PAGE_ACCESS_TOKEN=...
+PINTEREST_ACCESS_TOKEN=...
+PINTEREST_BOARD_ID=...
+```
+
+### 실행
+
+```bash
+pip install -r requirements.txt
+python auto_blog.py
+```
+
+### 중복 이미지 정리
+
+```bash
+# 미리보기
+python wp_merge_duplicate_images.py --dry-run
+
+# 실제 실행
+python wp_merge_duplicate_images.py
+```
