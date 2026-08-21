@@ -120,7 +120,7 @@ class DIM_Ajax {
     public function handle_save_upload_settings() {
         $this->auth();
         $enabled = filter_var( $_POST['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN );
-        $prefix  = sanitize_title_with_dashes( $_POST['prefix'] ?? '' );
+        $prefix  = sanitize_file_name( $_POST['prefix'] ?? '' );
         $counter = max( 1, absint( $_POST['counter'] ?? 1 ) );
 
         if ( $enabled && empty( $prefix ) ) {
@@ -165,12 +165,12 @@ class DIM_Ajax {
     }
 
     /**
-     * 다음 새벽 3시 타임스탬프 (서버 로컬 시간 기준)
+     * 다음 새벽 3시 타임스탬프 (WordPress 설정 시간대 기준)
      */
     private static function next_3am(): int {
+        // current_time('timestamp')는 WordPress 시간대 기준 로컬 시각
         $now    = current_time( 'timestamp' );
-        $target = mktime( 3, 0, 0, (int) date( 'n', $now ), (int) date( 'j', $now ), (int) date( 'Y', $now ) );
-        // 이미 오늘 3시가 지났으면 내일 3시
+        $target = mktime( 3, 0, 0, (int) wp_date( 'n', $now ), (int) wp_date( 'j', $now ), (int) wp_date( 'Y', $now ) );
         if ( $target <= $now ) {
             $target = strtotime( '+1 day', $target );
         }

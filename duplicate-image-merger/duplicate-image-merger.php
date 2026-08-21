@@ -3,7 +3,7 @@
  * Plugin Name: Duplicate Image Merger
  * Plugin URI:  https://github.com/yangsohee94-code/claude_memory_n1
  * Description: 중복 이미지 병합 · WebP 변환 · 대표이미지 정합성 자동 최적화
- * Version:     1.3.15
+ * Version:     1.3.16
  * Author:      Claude Memory N1
  * License:     GPL-2.0+
  * Text Domain: duplicate-image-merger
@@ -11,7 +11,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'DIM_VERSION',    '1.3.15' );
+define( 'DIM_VERSION',    '1.3.16' );
 define( 'DIM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DIM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -35,10 +35,22 @@ function dim_rename_upload_file( $file ) {
     $ext  = isset( $info['extension'] ) ? '.' . strtolower( $info['extension'] ) : '';
 
     if ( get_option( 'dim_upload_rename_enabled', false ) ) {
-        $prefix  = get_option( 'dim_upload_prefix', 'image' );
-        $counter = (int) get_option( 'dim_upload_counter', 1 );
-        update_option( 'dim_upload_counter', $counter + 1 );
-        $date         = date( 'Ymd' );
+        // ① 파일명 안전 확보: 저장 시 sanitize_title_with_dashes만 적용됐을 수 있으므로 재확인
+        $prefix = sanitize_file_name( get_option( 'dim_upload_prefix', 'image' ) ) ?: 'image';
+
+        // ② 원자적 카운터 증가 — 동시 업로드 시 중복 방지
+        // 옵션이 아직 없으면 INSERT 후 증가 (첫 실행 보호)
+        global $wpdb;
+        $exists = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name = 'dim_upload_counter'" );
+        if ( ! $exists ) {
+            add_option( 'dim_upload_counter', 1, '', 'no' );
+        }
+        $wpdb->query( "UPDATE {$wpdb->options} SET option_value = option_value + 1 WHERE option_name = 'dim_upload_counter'" );
+        $counter = (int) $wpdb->get_var( "SELECT option_value FROM {$wpdb->options} WHERE option_name = 'dim_upload_counter'" );
+        wp_cache_delete( 'dim_upload_counter', 'options' );
+
+        // ③ WordPress 설정 시간대 기준 날짜 사용
+        $date         = wp_date( 'Ymd' );
         $file['name'] = $prefix . '_' . $date . '_' . $counter . $ext;
     } else {
         $tmp  = $file['tmp_name'] ?? '';
