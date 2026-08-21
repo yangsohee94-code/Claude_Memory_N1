@@ -5,7 +5,7 @@ class DIM_Ajax {
 
     public function init() {
         $actions = [
-            'scan', 'enrich', 'merge', 'auto_merge', 'convert_webp', 'fix_thumbnails',
+            'scan', 'enrich', 'convert_webp', 'fix_thumbnails',
             'schedule', 'get_counts',
             'get_stats', 'get_no_thumb_posts', 'get_nonwebp', 'delete_images', 'scan_unused',
             'get_broken_img_posts', 'get_h2_no_img_posts', 'crop_image', 'auto_set_thumb',

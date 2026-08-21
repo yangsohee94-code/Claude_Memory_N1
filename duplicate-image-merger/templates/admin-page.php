@@ -4,7 +4,7 @@
 
     <!-- 탭 -->
     <div class="dim-tabs">
-        <button class="dim-tab active" data-tab="duplicate">중복 이미지 병합</button>
+        <button class="dim-tab active" data-tab="duplicate">중복 이미지 스캔</button>
         <button class="dim-tab" data-tab="nonwebp">WebP 변환</button>
         <button class="dim-tab" data-tab="nothumb">대표이미지 없는 글</button>
         <button class="dim-tab" data-tab="stats">용량 현황</button>
@@ -19,7 +19,7 @@
 
         <div class="dim-panel dim-panel-auto">
             <h2>⚡ 자동 최적화 예약 <span class="dim-badge">매일 새벽 3시</span></h2>
-            <p class="dim-panel-desc">중복 병합 → WebP 변환 → 대표이미지 정합성 수정을 매일 자동 실행합니다. 업로드 시 WebP 자동 변환도 항상 활성화됩니다.</p>
+            <p class="dim-panel-desc">WebP 변환 → 대표이미지 정합성 수정을 매일 자동 실행합니다. 업로드 시 WebP 자동 변환도 항상 활성화됩니다.</p>
             <div class="dim-panel-row">
                 <label class="dim-toggle">
                     <input type="checkbox" id="dim-schedule-toggle">
@@ -33,8 +33,6 @@
 
         <div class="dim-action-bar">
             <button id="dim-scan-btn" class="button button-primary">🔍 중복 이미지 스캔</button>
-            <button id="dim-auto-merge-btn" class="button" disabled>🔗 자동 병합 (사용 중 기준)</button>
-            <button id="dim-merge-selected-btn" class="button" disabled>✅ 선택 항목 병합</button>
             <span class="dim-spacer"></span>
             <button id="dim-thumb-btn" class="button dim-btn-thumb">🖼 대표이미지 정합성 수정</button>
         </div>
@@ -330,9 +328,7 @@
         <span class="dim-muted">{{count}}개 · {{hash_short}}</span>
     </div>
     <div class="dim-group-items">{{items}}</div>
-    <div class="dim-group-footer">
-        <button class="button dim-merge-group-btn" data-group-idx="{{idx}}">이 그룹 병합</button>
-    </div>
+    <div class="dim-group-footer"></div>
 </div>
 </script>
 
