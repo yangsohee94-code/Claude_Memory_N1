@@ -17,14 +17,30 @@ add_filter( 'auth_cookie_expiration', function ( $expiration, $user_id, $remembe
     return 7 * DAY_IN_SECONDS; // 604800초
 }, 10, 3 );
 
-// 로그인 상태일 때 매 페이지 로드마다 쿠키를 갱신 → 마지막 접속 기준 7일로 초기화
-// send_headers 훅은 parse_request 이후에 실행되므로
-// REST API·AJAX·Cron 요청은 그 이전에 exit → 별도 체크 없이 자동 제외
+// 마지막 접속 기준 7일 비활동 시 만료 구현
+// - send_headers 훅: REST/AJAX/Cron은 이전에 exit → 자동 제외
+// - 잔여 유효기간 1일 미만일 때만 갱신 → 불필요한 DB 쓰기 최소화
+// - 기존 세션 토큰 만료만 연장 → 토큰 누적 없음
 add_action( 'send_headers', function () {
     if ( ! is_user_logged_in() ) return;
 
+    $token = wp_get_session_token();
+    if ( empty( $token ) ) return;
+
     $user_id = get_current_user_id();
-    wp_set_auth_cookie( $user_id, true, is_ssl() );
+    $manager = WP_Session_Tokens::get_instance( $user_id );
+    $session = $manager->get( $token );
+    if ( ! $session ) return;
+
+    // 잔여 유효기간이 1일 초과이면 갱신 불필요
+    if ( $session['expiration'] - time() > DAY_IN_SECONDS ) return;
+
+    // 기존 토큰의 만료 시간만 7일 연장 (새 토큰 생성 없음)
+    $session['expiration'] = time() + 7 * DAY_IN_SECONDS;
+    $manager->update( $token, $session );
+
+    // 브라우저 쿠키도 갱신 ($token 전달로 새 세션 생성 방지)
+    wp_set_auth_cookie( $user_id, true, '', $token );
 } );
 // ─────────────────────────────────────────────────────────────────────────────
 
