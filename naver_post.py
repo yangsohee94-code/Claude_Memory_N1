@@ -9,38 +9,25 @@ load_dotenv()
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
-# 다계정 지원: NAVER_ACCOUNT_1 ~ NAVER_ACCOUNT_3
-# 각 계정은 "아이디|비밀번호|카테고리" 형식 (비밀번호·카테고리는 생략 가능)
-# 예) NAVER_ACCOUNT_1=yangsohee94|pw1234|연예
-#     NAVER_ACCOUNT_2=myblog2||자동차
-#     NAVER_ACCOUNT_3=myblog3||건강
-# 쿠키는 NAVER_COOKIES_1 / NAVER_COOKIES_2 / NAVER_COOKIES_3 (JSON array)
+# 카테고리별 네이버 계정 매핑
+# 형식: NAVER_ACCOUNT_entertainment=아이디|비밀번호|블로그카테고리명
+#       NAVER_ACCOUNT_health=아이디|비밀번호|블로그카테고리명
+#       NAVER_ACCOUNT_car=아이디|비밀번호|블로그카테고리명
+# 쿠키: NAVER_COOKIES_entertainment / NAVER_COOKIES_health / NAVER_COOKIES_car
 
-def _parse_accounts() -> list[dict]:
-    """환경변수에서 네이버 계정 목록 파싱"""
-    accounts = []
-    for i in range(1, 10):  # 최대 9개 계정 지원
-        raw = os.getenv(f"NAVER_ACCOUNT_{i}", "")
-        if not raw:
-            break
-        parts = raw.split("|")
-        accounts.append({
-            "id":       parts[0].strip() if len(parts) > 0 else "",
-            "pw":       parts[1].strip() if len(parts) > 1 else "",
-            "category": parts[2].strip() if len(parts) > 2 else "",
-            "cookies":  os.getenv(f"NAVER_COOKIES_{i}", ""),
-        })
-    # 단일 계정 방식도 호환 유지 (NAVER_ID / NAVER_PW)
-    if not accounts:
-        nid = os.getenv("NAVER_ID", "")
-        if nid:
-            accounts.append({
-                "id":       nid,
-                "pw":       os.getenv("NAVER_PW", ""),
-                "category": os.getenv("NAVER_BLOG_CATEGORY", ""),
-                "cookies":  os.getenv("NAVER_COOKIES", ""),
-            })
-    return accounts
+def _get_account_for_category(wp_category: str) -> dict | None:
+    """워드프레스 카테고리에 해당하는 네이버 계정 반환"""
+    key = wp_category.lower().strip()
+    raw = os.getenv(f"NAVER_ACCOUNT_{key}", "")
+    if not raw:
+        return None
+    parts = raw.split("|")
+    return {
+        "id":            parts[0].strip() if len(parts) > 0 else "",
+        "pw":            parts[1].strip() if len(parts) > 1 else "",
+        "blog_category": parts[2].strip() if len(parts) > 2 else "",
+        "cookies":       os.getenv(f"NAVER_COOKIES_{key}", ""),
+    }
 
 # ── 네이버용 콘텐츠 변환 지침 ─────────────────────────────────────────────
 
@@ -287,7 +274,7 @@ def _post_one_account(account: dict, naver_title: str, naver_content: str, naver
     naver_id = account["id"]
     naver_pw = account.get("pw", "")
     cookies  = account.get("cookies", "")
-    category = account.get("category", "")
+    category = account.get("blog_category", "") or account.get("category", "")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -392,17 +379,21 @@ def _post_one_account(account: dict, naver_title: str, naver_content: str, naver
             browser.close()
 
 
-# ── 메인 발행 함수 (다계정) ───────────────────────────────────────────────────
+# ── 메인 발행 함수 (카테고리 → 해당 계정 1개 발행) ─────────────────────────
 
 def post_naver_blog(title: str, wp_content: str, category: str = "") -> bool:
-    """워드프레스 글을 네이버 전체 계정에 재창작 발행"""
-    accounts = _parse_accounts()
-    if not accounts:
-        print("   ⏭️ 네이버 블로그: 계정 미설정, 건너뜀")
-        print("      → NAVER_ACCOUNT_1=아이디|비밀번호|카테고리 형식으로 설정하세요")
+    """워드프레스 카테고리에 맞는 네이버 블로그 계정에만 발행"""
+    if not category:
+        print("   ⏭️ 네이버 블로그: 카테고리 없음, 건너뜀")
         return False
 
-    print(f"   🔄 네이버 변환 중... (계정 {len(accounts)}개)")
+    account = _get_account_for_category(category)
+    if not account or not account["id"]:
+        print(f"   ⏭️ 네이버 블로그: [{category}] 매핑 계정 없음, 건너뜀")
+        print(f"      → NAVER_ACCOUNT_{category}=아이디|비밀번호|블로그카테고리 설정 필요")
+        return False
+
+    print(f"   🔄 네이버 변환 중... (카테고리: {category} → 계정: {account['id']})")
     naver = convert_wp_to_naver(title, wp_content, category)
     naver_title   = naver["title"]
     naver_content = naver["content"]
@@ -413,14 +404,5 @@ def post_naver_blog(title: str, wp_content: str, category: str = "") -> bool:
         print("   ❌ 네이버 콘텐츠 변환 실패")
         return False
 
-    results = []
-    for i, account in enumerate(accounts, 1):
-        print(f"\n   📌 계정 {i}/{len(accounts)}: {account['id']}")
-        ok = _post_one_account(account, naver_title, naver_content, naver_tags)
-        results.append(ok)
-        if i < len(accounts):
-            time.sleep(5)  # 계정 간 딜레이 (봇 감지 방지)
-
-    success = sum(results)
-    print(f"\n   📊 네이버 발행 결과: {success}/{len(accounts)} 계정 성공")
-    return success > 0
+    # 계정의 blog_category를 account에 넣어서 전달
+    return _post_one_account(account, naver_title, naver_content, naver_tags)
