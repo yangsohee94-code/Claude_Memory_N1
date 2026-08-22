@@ -12,6 +12,7 @@
         <button class="dim-tab" data-tab="brokenatt">엑박 이미지</button>
         <button class="dim-tab" data-tab="brokenimg">이미지 오류 글</button>
         <button class="dim-tab" data-tab="h2noimg">H2 이미지 누락</button>
+        <button class="dim-tab" data-tab="ogcheck">SNS OG 진단</button>
         <button class="dim-tab" data-tab="upload">업로드 설정</button>
     </div>
 
@@ -280,7 +281,33 @@
         </div>
     </div>
 
-    <!-- ⑩ 업로드 설정 탭 -->
+    <!-- ⑩ SNS OG 진단 탭 -->
+    <div class="dim-tab-content" id="dim-tab-ogcheck">
+        <div class="dim-panel-desc" style="padding:12px 0 6px;">
+            <strong>SNS OG 이미지 진단</strong> — 글별 OG 이미지(Rank Math / Yoast / 대표이미지) 파일 존재 여부를 확인합니다.<br>
+            <span class="dim-muted">깨진 이미지가 있으면 SNS 공유 시 썸네일이 표시되지 않습니다. 카카오·페이스북 링크를 눌러 미리보기를 확인하세요.</span>
+        </div>
+        <div class="dim-action-bar" style="margin-top:6px;">
+            <button id="dim-ogcheck-btn" class="button button-primary">🔍 OG 이미지 진단 시작</button>
+            <button id="dim-ogcheck-more-btn" class="button" style="display:none;">더 보기</button>
+        </div>
+
+        <div id="dim-progress-ogcheck" class="dim-progress-wrap" style="display:none;">
+            <div class="dim-progress-inner"><div class="dim-progress-bar" style="width:60%;"></div></div>
+            <span class="dim-progress-text">확인 중...</span>
+        </div>
+
+        <div id="dim-ogcheck-summary" style="display:none;" class="dim-summary">
+            <span>확인된 글 <strong id="dim-ogcheck-total">0</strong>개</span>
+            <span style="color:#d63638;">파일 깨짐 <strong id="dim-ogcheck-broken">0</strong>개</span>
+            <span style="color:#996600;">이미지 없음 <strong id="dim-ogcheck-noimg">0</strong>개</span>
+            <span style="color:#00a32a;">정상 <strong id="dim-ogcheck-ok">0</strong>개</span>
+        </div>
+
+        <div id="dim-ogcheck-list" style="margin-top:8px;"></div>
+    </div>
+
+    <!-- ⑪ 업로드 설정 탭 -->
     <div class="dim-tab-content" id="dim-tab-upload">
 
         <div class="dim-panel">

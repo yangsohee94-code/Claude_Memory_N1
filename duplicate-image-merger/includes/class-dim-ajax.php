@@ -12,7 +12,7 @@ class DIM_Ajax {
             'get_upload_settings', 'save_upload_settings',
             'scan_broken_attachments', 'remove_broken_blocks',
             'fill_thumbnails', 'fix_og_images',
-            'editor_scan_post',
+            'editor_scan_post', 'og_check',
         ];
         foreach ( $actions as $a ) {
             add_action( "wp_ajax_dim_{$a}", [ $this, "handle_{$a}" ] );
@@ -338,6 +338,15 @@ class DIM_Ajax {
         $post_id = absint( $_POST['post_id'] ?? 0 );
         if ( ! $post_id ) wp_send_json_error( [ 'message' => '잘못된 post_id' ] );
         wp_send_json_success( ( new DIM_Stats() )->get_post_broken_images( $post_id ) );
+    }
+
+    public function handle_og_check() {
+        $this->auth();
+        @set_time_limit( 120 );
+        wp_send_json_success( ( new DIM_Stats() )->get_og_image_status(
+            absint( $_POST['limit']  ?? 50 ),
+            absint( $_POST['offset'] ?? 0 )
+        ) );
     }
 
     private function auth() {

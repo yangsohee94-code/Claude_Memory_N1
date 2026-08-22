@@ -975,6 +975,83 @@
     }
 
     // ═══════════════════════════════════
+    // ⑩ SNS OG 진단 탭
+    // ═══════════════════════════════════
+    var ogOffset    = 0;
+    var ogTotal     = 0;
+    var ogBroken    = 0;
+    var ogNoImg     = 0;
+    var ogOk        = 0;
+
+    function loadOgStatus(append) {
+        if (!append) {
+            ogOffset = 0; ogTotal = 0; ogBroken = 0; ogNoImg = 0; ogOk = 0;
+            $('#dim-ogcheck-list').empty();
+            $('#dim-ogcheck-summary').hide();
+            $('#dim-ogcheck-more-btn').hide();
+        }
+        $('#dim-progress-ogcheck').show();
+        post('og_check', { limit: 50, offset: ogOffset }, function(err, d) {
+            $('#dim-progress-ogcheck').hide();
+            if (err) { notice(err.message, false); return; }
+
+            var items = d.items || [];
+            ogOffset = d.offset || (ogOffset + items.length);
+
+            items.forEach(function(item) {
+                ogTotal++;
+                if      (item.status === 'broken')   ogBroken++;
+                else if (item.status === 'no_image')  ogNoImg++;
+                else                                   ogOk++;
+
+                var sourceBadge = { rank_math:'Rank Math', yoast:'Yoast', featured:'대표이미지', none:'없음' }[item.og_source] || item.og_source;
+                var statusIcon  = { ok:'✅', broken:'❌', no_image:'⚠️' }[item.status] || '?';
+                var statusLabel = { ok:'정상', broken:'파일 깨짐', no_image:'이미지 없음' }[item.status] || item.status;
+                var statusColor = { ok:'#00a32a', broken:'#d63638', no_image:'#996600' }[item.status] || '';
+
+                var postUrl = item.url || '#';
+                var kakaoLink = 'https://developers.kakao.com/tool/clear/og?url=' + encodeURIComponent(postUrl);
+                var fbLink    = 'https://developers.facebook.com/tools/debug/?q=' + encodeURIComponent(postUrl);
+
+                var ogImgHtml = '';
+                if (item.og_url) {
+                    var thumb = item.og_url + (item.og_url.indexOf('?') === -1 ? '?' : '&') + 'w=80&v=' + Date.now();
+                    ogImgHtml = '<img src="' + esc(item.og_url) + '" style="width:60px;height:45px;object-fit:cover;border-radius:3px;vertical-align:middle;border:1px solid #ddd;" loading="lazy"> ';
+                }
+
+                var html = '<div class="dim-og-item" style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0f0;">'
+                    + '<div style="width:60px;flex-shrink:0;">' + ogImgHtml + '</div>'
+                    + '<div style="flex:1;min-width:0;">'
+                    + '<a href="' + esc(postUrl) + '" target="_blank" style="font-weight:500;text-decoration:none;color:#1d2327;">' + esc(item.title || '(제목 없음)') + '</a>'
+                    + '<div style="margin-top:3px;font-size:12px;color:#646970;">'
+                    + '<span style="color:' + statusColor + ';font-weight:bold;">' + statusIcon + ' ' + statusLabel + '</span>'
+                    + ' &nbsp;·&nbsp; 소스: ' + esc(sourceBadge)
+                    + '</div>'
+                    + (item.og_url ? '<div style="margin-top:2px;font-size:11px;color:#999;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;" title="' + esc(item.og_url) + '">' + esc(item.og_url) + '</div>' : '')
+                    + '</div>'
+                    + '<div style="flex-shrink:0;display:flex;flex-direction:column;gap:4px;align-items:flex-end;">'
+                    + '<a href="' + esc(kakaoLink) + '" target="_blank" class="button button-small" style="font-size:11px;padding:2px 7px;">카카오 확인</a>'
+                    + '<a href="' + esc(fbLink)    + '" target="_blank" class="button button-small" style="font-size:11px;padding:2px 7px;">FB 확인</a>'
+                    + '</div>'
+                    + '</div>';
+
+                $('#dim-ogcheck-list').append(html);
+            });
+
+            $('#dim-ogcheck-total').text(ogTotal);
+            $('#dim-ogcheck-broken').text(ogBroken);
+            $('#dim-ogcheck-noimg').text(ogNoImg);
+            $('#dim-ogcheck-ok').text(ogOk);
+            $('#dim-ogcheck-summary').show();
+            $('#dim-ogcheck-more-btn').toggle(!!d.has_more);
+        });
+    }
+
+    function esc(str) {
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ═══════════════════════════════════
     // 이벤트 바인딩
     // ═══════════════════════════════════
     $(function(){
@@ -1060,7 +1137,11 @@
         $('#dim-scan-h2noimg-btn').on('click', function(){ loadH2NoImgPosts(false); });
         $('#dim-h2noimg-more-btn').on('click', function(){ loadH2NoImgPosts(true); });
 
-        // 탭 ⑨ 업로드 설정
+        // 탭 ⑩ SNS OG 진단
+        $('#dim-ogcheck-btn').on('click', function(){ loadOgStatus(false); });
+        $('#dim-ogcheck-more-btn').on('click', function(){ loadOgStatus(true); });
+
+        // 탭 ⑪ 업로드 설정
         function updateUploadPreview() {
             var enabled = $('#dim-upload-rename-toggle').is(':checked');
             var prefix  = $.trim($('#dim-upload-prefix').val()) || 'image';

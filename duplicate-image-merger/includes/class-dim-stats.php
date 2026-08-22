@@ -760,6 +760,113 @@ class DIM_Stats {
     }
 
     /**
+     * SNS OG 이미지 상태 진단
+     * 각 발행 글의 OG 이미지(Rank Math / Yoast / 대표이미지) 파일 존재 여부를 확인
+     *
+     * @return array { items: [{id, title, url, status, og_source, og_url, thumb_id}], has_more, offset }
+     */
+    public function get_og_image_status( int $limit = 50, int $offset = 0 ): array {
+        global $wpdb;
+
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT p.ID, p.post_title,
+                    thumb.meta_value  AS thumbnail_id,
+                    rm.meta_value     AS rm_og_url,
+                    yoast.meta_value  AS yoast_og_url
+             FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->postmeta} thumb  ON thumb.post_id  = p.ID AND thumb.meta_key  = '_thumbnail_id'
+             LEFT JOIN {$wpdb->postmeta} rm     ON rm.post_id     = p.ID AND rm.meta_key     = 'rank_math_facebook_image'
+             LEFT JOIN {$wpdb->postmeta} yoast  ON yoast.post_id  = p.ID AND yoast.meta_key  = '_yoast_wpseo_opengraph-image'
+             WHERE p.post_type IN ('post','page')
+               AND p.post_status = 'publish'
+             ORDER BY p.post_date DESC
+             LIMIT %d OFFSET %d",
+            $limit, $offset
+        ) );
+
+        if ( empty( $rows ) ) {
+            return [ 'items' => [], 'has_more' => false, 'offset' => $offset ];
+        }
+
+        $upload_dir = wp_upload_dir();
+        $base_url   = trailingslashit( $upload_dir['baseurl'] );
+        $base_dir   = trailingslashit( $upload_dir['basedir'] );
+
+        // 대표이미지 attachment 파일 경로 사전 로드
+        $thumb_ids = array_values( array_filter( array_unique(
+            array_map( fn( $r ) => (int) $r->thumbnail_id, $rows )
+        ) ) );
+        $att_files = [];
+        if ( $thumb_ids ) {
+            $ph       = implode( ',', array_fill( 0, count( $thumb_ids ), '%d' ) );
+            // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+            $att_rows = $wpdb->get_results( $wpdb->prepare(
+                "SELECT post_id, meta_value FROM {$wpdb->postmeta}
+                 WHERE post_id IN ({$ph}) AND meta_key = '_wp_attached_file'",
+                ...$thumb_ids
+            ) );
+            foreach ( $att_rows as $ar ) {
+                $att_files[ (int) $ar->post_id ] = $ar->meta_value;
+            }
+        }
+
+        $items = [];
+        foreach ( $rows as $row ) {
+            $post_id  = (int) $row->ID;
+            $thumb_id = (int) ( $row->thumbnail_id ?? 0 );
+            $rm_url   = (string) ( $row->rm_og_url  ?? '' );
+            $yoast_url = (string) ( $row->yoast_og_url ?? '' );
+
+            $og_source = 'none';
+            $og_url    = '';
+            $file_ok   = false;
+
+            if ( $rm_url ) {
+                $og_source = 'rank_math';
+                $og_url    = $rm_url;
+            } elseif ( $yoast_url ) {
+                $og_source = 'yoast';
+                $og_url    = $yoast_url;
+            } elseif ( $thumb_id ) {
+                $og_source = 'featured';
+                $rel       = $att_files[ $thumb_id ] ?? '';
+                $og_url    = $rel ? rtrim( $base_url, '/' ) . '/' . ltrim( $rel, '/' ) : '';
+            }
+
+            if ( $og_url ) {
+                if ( strpos( $og_url, $base_url ) === 0 ) {
+                    $rel_path = substr( $og_url, strlen( $base_url ) );
+                    $abs      = dim_resolve_upload_path( $rel_path );
+                    $file_ok  = $abs && file_exists( $abs );
+                } else {
+                    $file_ok = true; // 외부 URL — 존재 여부 미확인
+                }
+            }
+
+            $status = 'no_image';
+            if ( $og_url ) {
+                $status = $file_ok ? 'ok' : 'broken';
+            }
+
+            $items[] = [
+                'id'        => $post_id,
+                'title'     => $row->post_title,
+                'url'       => (string) get_permalink( $post_id ),
+                'status'    => $status,
+                'og_source' => $og_source,
+                'og_url'    => $og_url,
+                'thumb_id'  => $thumb_id,
+            ];
+        }
+
+        return [
+            'items'    => $items,
+            'has_more' => count( $rows ) === $limit,
+            'offset'   => $offset + count( $rows ),
+        ];
+    }
+
+    /**
      * 여러 첨부파일 삭제
      */
     public function delete_attachments( array $ids ) {
