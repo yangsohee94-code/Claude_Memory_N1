@@ -285,7 +285,7 @@
     <div class="dim-tab-content" id="dim-tab-ogcheck">
         <div class="dim-panel-desc" style="padding:12px 0 6px;">
             <strong>SNS OG 이미지 진단</strong> — 글별 OG 이미지(Rank Math / Yoast / 대표이미지) 파일 존재 여부를 확인합니다.<br>
-            <span class="dim-muted">깨진 이미지가 있으면 SNS 공유 시 썸네일이 표시되지 않습니다. 카카오·페이스북 링크를 눌러 미리보기를 확인하세요.</span>
+            <span class="dim-muted">깨진 이미지·WebP 경고가 있으면 네이버·X·스레드·페이스북 공유 시 썸네일이 표시 안 될 수 있습니다. "OG 미리보기" 링크로 각 플랫폼 렌더링을 확인하세요.</span>
         </div>
         <div class="dim-action-bar" style="margin-top:6px;">
             <button id="dim-ogcheck-btn" class="button button-primary">🔍 OG 이미지 진단 시작</button>

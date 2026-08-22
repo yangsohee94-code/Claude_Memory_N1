@@ -1010,17 +1010,21 @@
                 var statusColor = { ok:'#00a32a', broken:'#d63638', no_image:'#996600' }[item.status] || '';
 
                 var postUrl = item.url || '#';
-                var kakaoLink = 'https://developers.kakao.com/tool/clear/og?url=' + encodeURIComponent(postUrl);
+                var ogxLink   = 'https://www.opengraph.xyz/url/' + encodeURIComponent(postUrl);
                 var fbLink    = 'https://developers.facebook.com/tools/debug/?q=' + encodeURIComponent(postUrl);
+                var naverLink = 'https://searchadvisor.naver.com/tools/sitecheck?url=' + encodeURIComponent(postUrl);
 
                 var ogImgHtml = '';
                 if (item.og_url) {
-                    var thumb = item.og_url + (item.og_url.indexOf('?') === -1 ? '?' : '&') + 'w=80&v=' + Date.now();
-                    ogImgHtml = '<img src="' + esc(item.og_url) + '" style="width:60px;height:45px;object-fit:cover;border-radius:3px;vertical-align:middle;border:1px solid #ddd;" loading="lazy"> ';
+                    ogImgHtml = '<img src="' + esc(item.og_url) + '" style="width:60px;height:45px;object-fit:cover;border-radius:3px;vertical-align:middle;border:1px solid #ddd;" loading="lazy">';
                 }
 
+                var webpWarn = (item.og_url && item.og_url.match(/\.webp(\?|$)/i))
+                    ? '<div style="margin-top:2px;font-size:11px;color:#996600;">⚠ WebP — 네이버·X 크롤러가 인식 못할 수 있음</div>'
+                    : '';
+
                 var html = '<div class="dim-og-item" style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0f0;">'
-                    + '<div style="width:60px;flex-shrink:0;">' + ogImgHtml + '</div>'
+                    + '<div style="width:60px;flex-shrink:0;text-align:center;">' + ogImgHtml + '</div>'
                     + '<div style="flex:1;min-width:0;">'
                     + '<a href="' + esc(postUrl) + '" target="_blank" style="font-weight:500;text-decoration:none;color:#1d2327;">' + esc(item.title || '(제목 없음)') + '</a>'
                     + '<div style="margin-top:3px;font-size:12px;color:#646970;">'
@@ -1028,10 +1032,12 @@
                     + ' &nbsp;·&nbsp; 소스: ' + esc(sourceBadge)
                     + '</div>'
                     + (item.og_url ? '<div style="margin-top:2px;font-size:11px;color:#999;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;" title="' + esc(item.og_url) + '">' + esc(item.og_url) + '</div>' : '')
+                    + webpWarn
                     + '</div>'
                     + '<div style="flex-shrink:0;display:flex;flex-direction:column;gap:4px;align-items:flex-end;">'
-                    + '<a href="' + esc(kakaoLink) + '" target="_blank" class="button button-small" style="font-size:11px;padding:2px 7px;">카카오 확인</a>'
-                    + '<a href="' + esc(fbLink)    + '" target="_blank" class="button button-small" style="font-size:11px;padding:2px 7px;">FB 확인</a>'
+                    + '<a href="' + esc(ogxLink)   + '" target="_blank" class="button button-small" style="font-size:11px;padding:2px 7px;" title="네이버·X·스레드·FB 미리보기">OG 미리보기</a>'
+                    + '<a href="' + esc(fbLink)     + '" target="_blank" class="button button-small" style="font-size:11px;padding:2px 7px;" title="FB 캐시 갱신">FB 캐시 갱신</a>'
+                    + '<a href="' + esc(naverLink)  + '" target="_blank" class="button button-small" style="font-size:11px;padding:2px 7px;" title="네이버 검색 어드바이저">네이버 확인</a>'
                     + '</div>'
                     + '</div>';
 
