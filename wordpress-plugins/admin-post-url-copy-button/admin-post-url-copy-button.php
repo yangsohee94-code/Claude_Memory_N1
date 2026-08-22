@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Admin Post URL Copy Button
  * Description: 관리자 글 목록에서 발행된 글에만 체크박스 옆에 URL 복사 버튼 컬럼을 추가합니다.
- * Version: 1.2.0
+ * Version: 1.3.0
  * Author: Sohee Yang
  */
 
@@ -14,7 +14,6 @@ function apucb_add_column( $columns ) {
     foreach ( $columns as $key => $label ) {
         $new[ $key ] = $label;
         if ( $key === 'cb' ) {
-            // 빈 헤더 – 컬럼 너비는 CSS로 고정
             $new['copy_url'] = '';
         }
     }
@@ -22,7 +21,7 @@ function apucb_add_column( $columns ) {
 }
 add_filter( 'manage_posts_columns', 'apucb_add_column' );
 
-/* ── 2. 발행됨 글에만 버튼 출력 ──────────────────────────────────── */
+/* ── 2. 발행됨 글에만 버튼 출력 ─────────────────────────────────── */
 function apucb_render_column( $column, $post_id ) {
     if ( $column !== 'copy_url' ) return;
     if ( get_post_status( $post_id ) !== 'publish' ) return;
@@ -36,37 +35,36 @@ function apucb_render_column( $column, $post_id ) {
 }
 add_action( 'manage_posts_custom_column', 'apucb_render_column', 10, 2 );
 
-/* ── 3. 스타일은 admin_head 에서 출력 (너비 확실히 적용) ─────────── */
-function apucb_head_style( $hook ) {
-    if ( $hook !== 'edit.php' ) return;
+/* ── 3. CSS + JS: admin_head/admin_footer 는 $hook 파라미터 없음
+         → get_current_screen() 으로 화면 판별 ─────────────────── */
+function apucb_head_style() {
+    $screen = get_current_screen();
+    if ( ! $screen || $screen->base !== 'edit' ) return;
     ?>
     <style>
-        /* 체크박스 컬럼과 동일한 너비로 고정 */
         th.column-copy_url,
         td.column-copy_url {
-            width: 2.2em !important;
-            max-width: 2.2em !important;
-            min-width: 2.2em !important;
+            width: 30px !important;
+            max-width: 30px !important;
+            min-width: 30px !important;
             padding: 8px 0 !important;
             text-align: center !important;
+            overflow: hidden !important;
         }
-
         .apucb-btn {
             background: none;
             border: none;
             cursor: pointer;
             color: #8c8f94;
-            padding: 2px 3px;
+            padding: 2px;
             border-radius: 3px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            vertical-align: middle;
             line-height: 1;
         }
         .apucb-btn:hover { color: #2271b1; }
-        .apucb-btn.apucb-ok  { color: #00a32a; }
-
+        .apucb-btn.apucb-ok { color: #00a32a; }
         #apucb-toast {
             position: fixed;
             bottom: 28px;
@@ -91,66 +89,58 @@ function apucb_head_style( $hook ) {
 }
 add_action( 'admin_head', 'apucb_head_style' );
 
-/* ── 4. JS 는 admin_footer 에서 출력 ────────────────────────────── */
-function apucb_footer_script( $hook ) {
-    if ( $hook !== 'edit.php' ) return;
+function apucb_footer_script() {
+    $screen = get_current_screen();
+    if ( ! $screen || $screen->base !== 'edit' ) return;
     ?>
     <div id="apucb-toast">URL 복사 완료!</div>
     <script>
-    (function(){
-        var toastEl = document.getElementById('apucb-toast');
-        var toastTimer;
+    (function () {
+        var toast = document.getElementById('apucb-toast');
+        var timer;
 
         function showToast() {
-            clearTimeout(toastTimer);
-            toastEl.classList.add('show');
-            toastTimer = setTimeout(function(){ toastEl.classList.remove('show'); }, 2000);
+            clearTimeout(timer);
+            toast.classList.add('show');
+            timer = setTimeout(function () { toast.classList.remove('show'); }, 2000);
         }
 
-        function doCopy(btn) {
-            var url = btn.getAttribute('data-url');
+        function copyText(url, btn) {
+            /* 가장 호환성 좋은 input + execCommand 방식 */
+            var el = document.createElement('input');
+            el.value = url;
+            el.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+            document.body.appendChild(el);
+            el.focus();
+            el.select();
+            var ok = false;
+            try { ok = document.execCommand('copy'); } catch (e) {}
+            document.body.removeChild(el);
 
-            function onSuccess() {
+            if (ok) {
                 btn.classList.add('apucb-ok');
-                setTimeout(function(){ btn.classList.remove('apucb-ok'); }, 1500);
+                setTimeout(function () { btn.classList.remove('apucb-ok'); }, 1500);
                 showToast();
+                return;
             }
 
-            if (window.isSecureContext && navigator.clipboard) {
-                navigator.clipboard.writeText(url).then(onSuccess, fallback);
-            } else {
-                fallback();
-            }
-
-            function fallback() {
-                var ta = document.createElement('textarea');
-                ta.value = url;
-                ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
-                document.body.appendChild(ta);
-                ta.select();
-                ta.setSelectionRange(0, 99999);
-                var ok = false;
-                try { ok = document.execCommand('copy'); } catch(e){}
-                document.body.removeChild(ta);
-                if (ok) onSuccess();
-            }
-        }
-
-        // 직접 핸들러 부착 (이벤트 위임 없이)
-        function attachHandlers() {
-            document.querySelectorAll('.apucb-btn').forEach(function(btn){
-                btn.addEventListener('click', function(e){
-                    e.preventDefault();
-                    doCopy(btn);
+            /* execCommand 실패 시 Clipboard API 시도 */
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(function () {
+                    btn.classList.add('apucb-ok');
+                    setTimeout(function () { btn.classList.remove('apucb-ok'); }, 1500);
+                    showToast();
                 });
-            });
+            }
         }
 
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', attachHandlers);
-        } else {
-            attachHandlers();
-        }
+        document.querySelectorAll('.apucb-btn').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                copyText(btn.getAttribute('data-url'), btn);
+            });
+        });
     })();
     </script>
     <?php
