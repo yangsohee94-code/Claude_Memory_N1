@@ -289,8 +289,10 @@
         </div>
         <div class="dim-action-bar" style="margin-top:6px;">
             <button id="dim-ogcheck-btn" class="button button-primary">🔍 OG 이미지 진단 시작</button>
+            <button id="dim-fix-webp-og-btn" class="button dim-btn-thumb">🔧 WebP → JPEG OG 자동 수정</button>
             <button id="dim-ogcheck-more-btn" class="button" style="display:none;">더 보기</button>
         </div>
+        <p class="dim-muted" style="margin:4px 0 0;font-size:12px;">※ "WebP → JPEG OG 자동 수정": WebP 대표이미지가 있는 글에 JPEG 썸네일을 OG 이미지로 자동 등록합니다. 수정 후 Facebook·네이버에서 캐시를 갱신하세요.</p>
 
         <div id="dim-progress-ogcheck" class="dim-progress-wrap" style="display:none;">
             <div class="dim-progress-inner"><div class="dim-progress-bar" style="width:60%;"></div></div>

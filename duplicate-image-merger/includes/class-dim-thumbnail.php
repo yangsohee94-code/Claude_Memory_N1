@@ -367,6 +367,143 @@ class DIM_Thumbnail {
     }
 
     /**
+     * WebP 대표이미지 → JPEG 썸네일로 OG 이미지 자동 설정
+     *
+     * 네이버·X 등 크롤러가 WebP OG 이미지를 지원하지 않는 문제 해결.
+     * WordPress가 자동 생성한 JPEG 썸네일(컨버터가 건드리지 않음)을
+     * Rank Math / Yoast OG 이미지 메타에 명시적으로 기록한다.
+     *
+     * @return array { fixed, skipped, no_jpeg_found, errors }
+     */
+    public function fix_webp_og_to_jpeg(): array {
+        global $wpdb;
+
+        $upload   = wp_upload_dir();
+        $base_url = trailingslashit( $upload['baseurl'] );
+        $base_dir = trailingslashit( $upload['basedir'] );
+
+        // 대표이미지 있는 발행 글 중 명시적 OG 메타가 없는 것 대상
+        // (명시적 메타가 이미 있으면 fix_og_images()로 관리하므로 제외)
+        $rows = $wpdb->get_results(
+            "SELECT p.ID, thumb.meta_value AS thumbnail_id
+             FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} thumb ON thumb.post_id = p.ID AND thumb.meta_key = '_thumbnail_id'
+             WHERE p.post_type IN ('post','page')
+               AND p.post_status = 'publish'
+               AND CAST(thumb.meta_value AS UNSIGNED) > 0
+               AND NOT EXISTS (
+                   SELECT 1 FROM {$wpdb->postmeta}
+                   WHERE post_id = p.ID
+                   AND meta_key IN ('rank_math_facebook_image','_yoast_wpseo_opengraph-image')
+                   AND meta_value != ''
+               )"
+        );
+
+        $fixed        = 0;
+        $skipped      = 0;
+        $no_jpeg_found = 0;
+        $errors       = [];
+
+        // 썸네일 attachment의 파일경로·메타데이터 배치 로드
+        $thumb_ids = array_values( array_filter( array_unique(
+            array_map( fn( $r ) => (int) $r->thumbnail_id, $rows )
+        ) ) );
+
+        if ( empty( $thumb_ids ) ) {
+            return [ 'fixed' => 0, 'skipped' => 0, 'no_jpeg_found' => 0, 'errors' => [] ];
+        }
+
+        $ph         = implode( ',', array_fill( 0, count( $thumb_ids ), '%d' ) );
+        // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+        $file_rows  = $wpdb->get_results( $wpdb->prepare(
+            "SELECT post_id, meta_value FROM {$wpdb->postmeta}
+             WHERE post_id IN ({$ph}) AND meta_key = '_wp_attached_file'",
+            ...$thumb_ids
+        ) );
+        // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+        $meta_rows  = $wpdb->get_results( $wpdb->prepare(
+            "SELECT post_id, meta_value FROM {$wpdb->postmeta}
+             WHERE post_id IN ({$ph}) AND meta_key = '_wp_attachment_metadata'",
+            ...$thumb_ids
+        ) );
+
+        $file_map = [];
+        foreach ( $file_rows as $fr ) { $file_map[ (int) $fr->post_id ] = $fr->meta_value; }
+        $att_meta_map = [];
+        foreach ( $meta_rows as $mr ) { $att_meta_map[ (int) $mr->post_id ] = maybe_unserialize( $mr->meta_value ); }
+
+        foreach ( $rows as $row ) {
+            $post_id  = (int) $row->ID;
+            $thumb_id = (int) $row->thumbnail_id;
+            $rel      = $file_map[ $thumb_id ] ?? '';
+
+            if ( ! $rel || ! preg_match( '/\.webp$/i', $rel ) ) {
+                $skipped++;
+                continue;
+            }
+
+            $jpeg_url = '';
+
+            // ① _wp_attachment_metadata 의 sizes 배열에서 JPEG 썸네일 탐색
+            $att_meta = $att_meta_map[ $thumb_id ] ?? null;
+            if ( is_array( $att_meta ) && ! empty( $att_meta['sizes'] ) ) {
+                $dir_rel  = ( dirname( $rel ) !== '.' ) ? trailingslashit( dirname( $rel ) ) : '';
+                $best_area = 0;
+                $best_file = '';
+
+                foreach ( $att_meta['sizes'] as $size_data ) {
+                    $sf = $size_data['file'] ?? '';
+                    if ( ! preg_match( '/\.(jpg|jpeg|png)$/i', $sf ) ) continue;
+                    $area = ( $size_data['width'] ?? 0 ) * ( $size_data['height'] ?? 0 );
+                    $abs  = dim_resolve_upload_path( $dir_rel . $sf );
+                    if ( $area > $best_area && $abs && file_exists( $abs ) ) {
+                        $best_area = $area;
+                        $best_file = $dir_rel . $sf;
+                    }
+                }
+
+                if ( $best_file ) {
+                    $jpeg_url = $base_url . $best_file;
+                }
+            }
+
+            // ② glob 폴백: image-WxH.jpg 형태의 파일 탐색
+            if ( ! $jpeg_url ) {
+                $dir_abs   = $base_dir . ( ( dirname( $rel ) !== '.' ) ? dirname( $rel ) : '' );
+                $base_name = basename( $rel, '.webp' );
+                $candidates = glob( trailingslashit( $dir_abs ) . $base_name . '-*.jpg' );
+                if ( ! empty( $candidates ) ) {
+                    usort( $candidates, fn( $a, $b ) => (int) filesize( $b ) - (int) filesize( $a ) );
+                    $best_rel = ltrim( str_replace( $base_dir, '', $candidates[0] ), '/' );
+                    $jpeg_url = $base_url . $best_rel;
+                }
+            }
+
+            if ( ! $jpeg_url ) {
+                $no_jpeg_found++;
+                continue;
+            }
+
+            // Rank Math OG 이미지 메타 설정
+            update_post_meta( $post_id, 'rank_math_facebook_image', $jpeg_url );
+            update_post_meta( $post_id, 'rank_math_twitter_image',  $jpeg_url );
+            // Yoast OG 이미지 메타 설정
+            update_post_meta( $post_id, '_yoast_wpseo_opengraph-image', $jpeg_url );
+            update_post_meta( $post_id, '_yoast_wpseo_twitter-image',   $jpeg_url );
+
+            wp_cache_delete( $post_id, 'post_meta' );
+            $fixed++;
+        }
+
+        return [
+            'fixed'         => $fixed,
+            'skipped'       => $skipped,
+            'no_jpeg_found' => $no_jpeg_found,
+            'errors'        => $errors,
+        ];
+    }
+
+    /**
      * 첨부파일이 DB에 존재하고 실제 파일도 디스크에 있는지 확인
      */
     private function attachment_file_exists( int $id ): bool {

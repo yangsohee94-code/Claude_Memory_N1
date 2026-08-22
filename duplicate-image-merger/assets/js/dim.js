@@ -1012,7 +1012,7 @@
                 var postUrl = item.url || '#';
                 var ogxLink   = 'https://www.opengraph.xyz/url/' + encodeURIComponent(postUrl);
                 var fbLink    = 'https://developers.facebook.com/tools/debug/?q=' + encodeURIComponent(postUrl);
-                var naverLink = 'https://searchadvisor.naver.com/tools/sitecheck?url=' + encodeURIComponent(postUrl);
+                var naverLink = 'https://searchadvisor.naver.com/indexing';
 
                 var ogImgHtml = '';
                 if (item.og_url) {
@@ -1037,7 +1037,7 @@
                     + '<div style="flex-shrink:0;display:flex;flex-direction:column;gap:4px;align-items:flex-end;">'
                     + '<a href="' + esc(ogxLink)   + '" target="_blank" class="button button-small" style="font-size:11px;padding:2px 7px;" title="네이버·X·스레드·FB 미리보기">OG 미리보기</a>'
                     + '<a href="' + esc(fbLink)     + '" target="_blank" class="button button-small" style="font-size:11px;padding:2px 7px;" title="FB 캐시 갱신">FB 캐시 갱신</a>'
-                    + '<a href="' + esc(naverLink)  + '" target="_blank" class="button button-small" style="font-size:11px;padding:2px 7px;" title="네이버 검색 어드바이저">네이버 확인</a>'
+                    + '<a href="' + esc(naverLink)  + '" target="_blank" class="button button-small" style="font-size:11px;padding:2px 7px;" title="네이버 서치어드바이저 URL 제출">네이버 재색인</a>'
                     + '</div>'
                     + '</div>';
 
@@ -1146,6 +1146,19 @@
         // 탭 ⑩ SNS OG 진단
         $('#dim-ogcheck-btn').on('click', function(){ loadOgStatus(false); });
         $('#dim-ogcheck-more-btn').on('click', function(){ loadOgStatus(true); });
+        $('#dim-fix-webp-og-btn').on('click', function(){
+            var $btn = $(this);
+            $btn.prop('disabled', true).text('처리 중...');
+            post('fix_webp_og', {}, function(err, d) {
+                $btn.prop('disabled', false).text('🔧 WebP → JPEG OG 자동 수정');
+                if (err) { notice(err.message, false); return; }
+                var msg = 'OG 이미지 수정 완료 — ' + d.fixed + '개 글에 JPEG 썸네일 등록';
+                if (d.no_jpeg_found) msg += ' · JPEG 없음 ' + d.no_jpeg_found + '개';
+                if (d.skipped) msg += ' · WebP 아닌 글 ' + d.skipped + '개 건너뜀';
+                notice(msg + '\n※ Facebook·네이버 캐시는 각 링크의 "FB 캐시 갱신", "네이버 재색인"에서 갱신하세요.', true);
+                loadOgStatus(false);
+            });
+        });
 
         // 탭 ⑪ 업로드 설정
         function updateUploadPreview() {
