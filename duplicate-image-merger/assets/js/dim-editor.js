@@ -108,11 +108,6 @@
         return el( Panel, { name: 'dim-image-manager', title: '🖼 이미지 관리 (DIM)', icon: 'format-image', className: 'dim-mgr-panel' },
             el( 'div', { style: { paddingTop: '4px' } },
 
-                /* H2 소제목 카운트 */
-                el( 'p', { style: { margin: '0 0 8px', fontSize: '13px', fontWeight: '500', color: '#1d2327' } },
-                    '소제목(H2): ', el( 'strong', null, h2Count + '개' )
-                ),
-
                 /* 버튼 행 */
                 el( 'div', { style: { display: 'flex', gap: '6px', marginBottom: '8px' } },
                     el( Button, {
@@ -161,27 +156,71 @@
 
     register( 'dim-image-manager', { render: DimImagePanel, icon: 'format-image' } );
 
-    // ── DIM 패널을 사이드바 최상단으로 이동 ──────────────────────────
-    // CSS order:-99 는 부모가 flex 컨테이너여야 하는데 WP 버전·테마에 따라
-    // 구조가 달라 신뢰하기 어렵다. MutationObserver로 렌더 직후 DOM 이동.
+    // ── DIM 패널을 plugin 패널 그룹 최상단으로 이동 ─────────────────
     (function () {
         function moveDimPanelToTop() {
             var inner = document.querySelector( '.dim-mgr-panel' );
             if ( ! inner ) return;
-            // dim-mgr-panel 은 components-panel__body 에 추가됨.
-            // 그 바깥 .plugin-document-setting-panel 이 실제 재정렬 대상.
             var outer = inner.closest( '.plugin-document-setting-panel' );
-            if ( ! outer ) outer = inner.parentNode;
             if ( ! outer || ! outer.parentNode ) return;
-            if ( outer.parentNode.firstElementChild === outer ) return; // 이미 최상단
-            outer.parentNode.insertBefore( outer, outer.parentNode.firstElementChild );
+            // 같은 부모 안의 첫 번째 .plugin-document-setting-panel 앞에 삽입
+            // (firstElementChild 사용 시 core 패널 앞으로 가버리는 문제 방지)
+            var firstPlugin = outer.parentNode.querySelector( '.plugin-document-setting-panel' );
+            if ( ! firstPlugin || firstPlugin === outer ) return;
+            outer.parentNode.insertBefore( outer, firstPlugin );
         }
 
         var mo = new MutationObserver( moveDimPanelToTop );
         mo.observe( document.body, { childList: true, subtree: true } );
-        // 초기 렌더 완료 후 한 번 더 보정
         setTimeout( moveDimPanelToTop, 800 );
         setTimeout( moveDimPanelToTop, 2500 );
+    }() );
+
+    // ── H2 소제목 카운트를 "글 블록 ×" 탭바 옆에 주입 ──────────────
+    (function () {
+        var badge = null;
+
+        function injectBadge() {
+            // 탭바 컨테이너 후보 (WP 버전별 클래스명 다름)
+            var header = document.querySelector( '.edit-post-sidebar__panel-tabs' )
+                      || document.querySelector( '.interface-complementary-area-header__small' )
+                      || document.querySelector( '.interface-complementary-area-header' );
+            if ( ! header ) return null;
+
+            var b = document.createElement( 'span' );
+            b.id = 'dim-h2-badge';
+            b.style.cssText = [
+                'display:inline-block',
+                'font-size:11px',
+                'font-weight:600',
+                'color:#2271b1',
+                'background:#e8f3fb',
+                'border:1px solid #c5d9ea',
+                'border-radius:3px',
+                'padding:1px 6px',
+                'margin-left:8px',
+                'vertical-align:middle',
+                'white-space:nowrap',
+                'line-height:1.6',
+            ].join( ';' );
+            header.appendChild( b );
+            return b;
+        }
+
+        function updateH2Badge() {
+            var count = countH2( wp.data.select( 'core/block-editor' ).getBlocks() );
+
+            if ( ! badge || ! badge.isConnected ) {
+                badge = document.getElementById( 'dim-h2-badge' ) || injectBadge();
+            }
+            if ( badge ) badge.textContent = '소제목 ' + count + '개';
+        }
+
+        wp.data.subscribe( function () {
+            requestAnimationFrame( updateH2Badge );
+        } );
+        setTimeout( updateH2Badge, 1000 );
+        setTimeout( updateH2Badge, 2500 );
     }() );
 
     // 편집기 로드 후 "글" 탭(Document panel)을 기본으로 표시
