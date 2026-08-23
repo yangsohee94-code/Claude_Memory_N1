@@ -447,23 +447,38 @@ class DIM_Thumbnail {
             // ① _wp_attachment_metadata 의 sizes 배열에서 JPEG 썸네일 탐색
             $att_meta = $att_meta_map[ $thumb_id ] ?? null;
             if ( is_array( $att_meta ) && ! empty( $att_meta['sizes'] ) ) {
-                $dir_rel  = ( dirname( $rel ) !== '.' ) ? trailingslashit( dirname( $rel ) ) : '';
-                $best_area = 0;
-                $best_file = '';
+                $dir_rel      = ( dirname( $rel ) !== '.' ) ? trailingslashit( dirname( $rel ) ) : '';
+                $og_size_file = '';   // dim-og 전용 사이즈 (1200×630 JPEG)
+                $best_800_file = '';  // ≥800px 중 최대 면적 (네이버 대형 카드 기준)
+                $best_800_area = 0;
+                $best_file     = '';  // 전체 최대 면적 (폴백)
+                $best_area     = 0;
 
-                foreach ( $att_meta['sizes'] as $size_data ) {
+                foreach ( $att_meta['sizes'] as $size_name => $size_data ) {
                     $sf = $size_data['file'] ?? '';
                     if ( ! preg_match( '/\.(jpg|jpeg|png)$/i', $sf ) ) continue;
-                    $area = ( $size_data['width'] ?? 0 ) * ( $size_data['height'] ?? 0 );
+                    $w    = (int) ( $size_data['width']  ?? 0 );
+                    $area = $w * (int) ( $size_data['height'] ?? 0 );
                     $abs  = dim_resolve_upload_path( $dir_rel . $sf );
-                    if ( $area > $best_area && $abs && file_exists( $abs ) ) {
+                    if ( ! $abs || ! file_exists( $abs ) ) continue;
+
+                    if ( $size_name === 'dim-og' ) {
+                        $og_size_file = $dir_rel . $sf;
+                    }
+                    if ( $w >= 800 && $area > $best_800_area ) {
+                        $best_800_area = $area;
+                        $best_800_file = $dir_rel . $sf;
+                    }
+                    if ( $area > $best_area ) {
                         $best_area = $area;
                         $best_file = $dir_rel . $sf;
                     }
                 }
 
-                if ( $best_file ) {
-                    $jpeg_url = $base_url . $best_file;
+                // 우선순위: dim-og → ≥800px 최대면적 → 전체 최대면적
+                $chosen = $og_size_file ?: $best_800_file ?: $best_file;
+                if ( $chosen ) {
+                    $jpeg_url = $base_url . $chosen;
                 }
             }
 
@@ -500,6 +515,115 @@ class DIM_Thumbnail {
             'skipped'       => $skipped,
             'no_jpeg_found' => $no_jpeg_found,
             'errors'        => $errors,
+        ];
+    }
+
+    /**
+     * 기존 WebP 대표이미지에서 1200×630 JPEG(dim-og) 재생성
+     *
+     * add_image_size('dim-og') 등록 이전에 업로드된 이미지는 dim-og 썸네일이 없으므로
+     * wp_get_image_editor로 WebP → 1200×630 JPEG를 직접 생성하고
+     * _wp_attachment_metadata['sizes']['dim-og']에 등록한다.
+     *
+     * @param int $batch 1회 실행당 처리할 첨부파일 수
+     * @return array { generated, skipped, errors, has_more }
+     */
+    public function generate_og_jpeg_for_existing( int $batch = 20 ): array {
+        global $wpdb;
+
+        $upload   = wp_upload_dir();
+        $base_dir = trailingslashit( $upload['basedir'] );
+
+        // dim-og 사이즈가 없는 WebP 대표이미지 attachment 조회
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT DISTINCT pm.meta_value AS thumb_id
+             FROM {$wpdb->postmeta} pm
+             INNER JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+             WHERE pm.meta_key = '_thumbnail_id'
+               AND p.post_type IN ('post','page')
+               AND p.post_status = 'publish'
+               AND CAST(pm.meta_value AS UNSIGNED) > 0
+             ORDER BY pm.meta_value DESC
+             LIMIT %d",
+            $batch * 3 // 넉넉히 가져와서 필터링
+        ) );
+
+        $generated = 0;
+        $skipped   = 0;
+        $errors    = [];
+
+        $processed = 0;
+        foreach ( $rows as $row ) {
+            if ( $processed >= $batch ) break;
+
+            $thumb_id = (int) $row->thumb_id;
+            $rel      = get_post_meta( $thumb_id, '_wp_attached_file', true );
+
+            // WebP 파일이 아닌 경우 스킵
+            if ( ! $rel || ! preg_match( '/\.webp$/i', $rel ) ) {
+                $skipped++;
+                continue;
+            }
+
+            $att_meta = wp_get_attachment_metadata( $thumb_id );
+            if ( ! is_array( $att_meta ) ) {
+                $skipped++;
+                continue;
+            }
+
+            // 이미 dim-og 사이즈가 있으면 스킵
+            if ( ! empty( $att_meta['sizes']['dim-og'] ) ) {
+                $dir_rel  = ( dirname( $rel ) !== '.' ) ? trailingslashit( dirname( $rel ) ) : '';
+                $og_file  = $dir_rel . ( $att_meta['sizes']['dim-og']['file'] ?? '' );
+                $og_abs   = dim_resolve_upload_path( $og_file );
+                if ( $og_abs && file_exists( $og_abs ) ) {
+                    $skipped++;
+                    continue;
+                }
+            }
+
+            $processed++;
+            $webp_abs = dim_resolve_upload_path( $rel );
+            if ( ! $webp_abs || ! file_exists( $webp_abs ) ) {
+                $errors[] = "ID {$thumb_id}: 파일 없음";
+                continue;
+            }
+
+            $editor = wp_get_image_editor( $webp_abs );
+            if ( is_wp_error( $editor ) ) {
+                $errors[] = "ID {$thumb_id}: " . $editor->get_error_message();
+                continue;
+            }
+
+            $editor->resize( 1200, 630, true );
+
+            $dir_abs  = dirname( $webp_abs );
+            $basename = basename( $webp_abs, '.webp' );
+            $og_path  = trailingslashit( $dir_abs ) . $basename . '-1200x630.jpg';
+            $saved    = $editor->save( $og_path, 'image/jpeg' );
+
+            if ( is_wp_error( $saved ) ) {
+                $errors[] = "ID {$thumb_id}: " . $saved->get_error_message();
+                continue;
+            }
+
+            // _wp_attachment_metadata 업데이트
+            $att_meta['sizes']['dim-og'] = [
+                'file'      => basename( $saved['path'] ),
+                'width'     => $saved['width'],
+                'height'    => $saved['height'],
+                'mime-type' => 'image/jpeg',
+                'filesize'  => file_exists( $saved['path'] ) ? filesize( $saved['path'] ) : 0,
+            ];
+            wp_update_attachment_metadata( $thumb_id, $att_meta );
+            $generated++;
+        }
+
+        return [
+            'generated' => $generated,
+            'skipped'   => $skipped,
+            'errors'    => $errors,
+            'has_more'  => ( count( $rows ) >= $batch * 3 && $generated + count( $errors ) >= $batch ),
         ];
     }
 

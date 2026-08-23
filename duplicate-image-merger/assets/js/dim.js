@@ -1160,6 +1160,43 @@
             });
         });
 
+        // 기존 이미지에서 1200×630 JPEG 재생성 (반복 클릭 방식)
+        (function(){
+            var generating = false;
+            var total = 0;
+            $('#dim-generate-og-jpeg-btn').on('click', function(){
+                if (generating) return;
+                generating = true;
+                var $btn = $(this);
+                $btn.prop('disabled', true);
+                var runBatch = function() {
+                    $btn.text('생성 중... (' + total + '개 완료)');
+                    post('generate_og_jpeg', { batch: 20 }, function(err, d) {
+                        if (err) {
+                            generating = false;
+                            $btn.prop('disabled', false).text('🖼 기존 이미지 OG 재생성');
+                            notice('오류: ' + err.message, false);
+                            return;
+                        }
+                        total += d.generated;
+                        if (d.has_more) {
+                            runBatch();
+                        } else {
+                            generating = false;
+                            $btn.prop('disabled', false).text('🖼 기존 이미지 OG 재생성');
+                            var msg = '1200×630 JPEG 생성 완료 — ' + total + '개 생성';
+                            if (d.skipped) msg += ' · ' + d.skipped + '개 이미 있음';
+                            if (d.errors && d.errors.length) msg += ' · 오류 ' + d.errors.length + '개';
+                            msg += '\n이제 "WebP → JPEG OG 자동 수정"을 실행해 OG 메타를 등록하세요.';
+                            notice(msg, true);
+                            total = 0;
+                        }
+                    });
+                };
+                runBatch();
+            });
+        }());
+
         // 탭 ⑪ 업로드 설정
         function updateUploadPreview() {
             var enabled = $('#dim-upload-rename-toggle').is(':checked');

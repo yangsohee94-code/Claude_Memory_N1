@@ -3,7 +3,7 @@
  * Plugin Name: Duplicate Image Merger
  * Plugin URI:  https://github.com/yangsohee94-code/claude_memory_n1
  * Description: 중복 이미지 병합 · WebP 변환 · 대표이미지 정합성 자동 최적화
- * Version:     1.3.35
+ * Version:     1.3.36
  * Author:      Claude Memory N1
  * License:     GPL-2.0+
  * Text Domain: duplicate-image-merger
@@ -11,9 +11,14 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'DIM_VERSION',    '1.3.35' );
+define( 'DIM_VERSION',    '1.3.36' );
 define( 'DIM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DIM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+
+// 네이버 대형 카드 기준(800px+)을 충족하는 OG 전용 이미지 사이즈 등록
+add_action( 'init', function () {
+    add_image_size( 'dim-og', 1200, 630, true );
+} );
 
 /**
  * _wp_attached_file 메타가 절대경로로 저장된 경우를 방어적으로 처리

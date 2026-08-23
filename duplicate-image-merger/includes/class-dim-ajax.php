@@ -12,7 +12,7 @@ class DIM_Ajax {
             'get_upload_settings', 'save_upload_settings',
             'scan_broken_attachments', 'remove_broken_blocks',
             'fill_thumbnails', 'fix_og_images',
-            'editor_scan_post', 'og_check', 'fix_webp_og',
+            'editor_scan_post', 'og_check', 'fix_webp_og', 'generate_og_jpeg',
         ];
         foreach ( $actions as $a ) {
             add_action( "wp_ajax_dim_{$a}", [ $this, "handle_{$a}" ] );
@@ -354,6 +354,15 @@ class DIM_Ajax {
         @set_time_limit( 300 );
         @ini_set( 'memory_limit', '256M' );
         wp_send_json_success( ( new DIM_Thumbnail() )->fix_webp_og_to_jpeg() );
+    }
+
+    public function handle_generate_og_jpeg() {
+        $this->auth();
+        @set_time_limit( 300 );
+        @ini_set( 'memory_limit', '256M' );
+        $batch  = absint( $_POST['batch'] ?? 20 );
+        $result = ( new DIM_Thumbnail() )->generate_og_jpeg_for_existing( $batch );
+        wp_send_json_success( $result );
     }
 
     private function auth() {
