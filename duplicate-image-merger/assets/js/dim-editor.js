@@ -19,9 +19,22 @@
 
     if ( ! Panel ) return;
 
+    function countH2( blocks ) {
+        var n = 0;
+        for ( var i = 0; i < blocks.length; i++ ) {
+            if ( blocks[i].name === 'core/heading' && blocks[i].attributes.level === 2 ) n++;
+            if ( blocks[i].innerBlocks && blocks[i].innerBlocks.length ) n += countH2( blocks[i].innerBlocks );
+        }
+        return n;
+    }
+
     function DimImagePanel() {
         var postId = useSelect( function ( select ) {
             return select( 'core/editor' ).getCurrentPostId();
+        } );
+
+        var h2Count = useSelect( function ( select ) {
+            return countH2( select( 'core/block-editor' ).getBlocks() );
         } );
 
         var _s1 = useState( false ),  scanning      = _s1[0], setScanning      = _s1[1];
@@ -92,8 +105,13 @@
 
         var hasBroken = brokenImages && brokenImages.length > 0;
 
-        return el( Panel, { name: 'dim-image-manager', title: '🖼 이미지 관리 (DIM)', icon: 'format-image' },
+        return el( Panel, { name: 'dim-image-manager', title: '🖼 이미지 관리 (DIM)', icon: 'format-image', className: 'dim-mgr-panel' },
             el( 'div', { style: { paddingTop: '4px' } },
+
+                /* H2 소제목 카운트 */
+                el( 'p', { style: { margin: '0 0 8px', fontSize: '13px', fontWeight: '500', color: '#1d2327' } },
+                    '소제목(H2): ', el( 'strong', null, h2Count + '개' )
+                ),
 
                 /* 버튼 행 */
                 el( 'div', { style: { display: 'flex', gap: '6px', marginBottom: '8px' } },

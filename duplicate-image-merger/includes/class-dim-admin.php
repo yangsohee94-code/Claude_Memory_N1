@@ -50,6 +50,18 @@ class DIM_Admin {
             'ajax_url' => admin_url( 'admin-ajax.php' ),
             'nonce'    => wp_create_nonce( 'dim_nonce' ),
         ] );
+
+        // DIM 패널을 사이드바 최상단으로 고정하는 CSS
+        wp_add_inline_style( 'wp-edit-post', '
+            .editor-sidebar .components-panel,
+            .interface-interface-skeleton__sidebar .components-panel {
+                display: flex !important;
+                flex-direction: column !important;
+            }
+            .plugin-document-setting-panel:has(.dim-mgr-panel) {
+                order: -99 !important;
+            }
+        ' );
     }
 
     public function media_library_styles() {
