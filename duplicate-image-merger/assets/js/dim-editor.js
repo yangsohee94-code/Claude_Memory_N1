@@ -161,6 +161,29 @@
 
     register( 'dim-image-manager', { render: DimImagePanel, icon: 'format-image' } );
 
+    // ── DIM 패널을 사이드바 최상단으로 이동 ──────────────────────────
+    // CSS order:-99 는 부모가 flex 컨테이너여야 하는데 WP 버전·테마에 따라
+    // 구조가 달라 신뢰하기 어렵다. MutationObserver로 렌더 직후 DOM 이동.
+    (function () {
+        function moveDimPanelToTop() {
+            var inner = document.querySelector( '.dim-mgr-panel' );
+            if ( ! inner ) return;
+            // dim-mgr-panel 은 components-panel__body 에 추가됨.
+            // 그 바깥 .plugin-document-setting-panel 이 실제 재정렬 대상.
+            var outer = inner.closest( '.plugin-document-setting-panel' );
+            if ( ! outer ) outer = inner.parentNode;
+            if ( ! outer || ! outer.parentNode ) return;
+            if ( outer.parentNode.firstElementChild === outer ) return; // 이미 최상단
+            outer.parentNode.insertBefore( outer, outer.parentNode.firstElementChild );
+        }
+
+        var mo = new MutationObserver( moveDimPanelToTop );
+        mo.observe( document.body, { childList: true, subtree: true } );
+        // 초기 렌더 완료 후 한 번 더 보정
+        setTimeout( moveDimPanelToTop, 800 );
+        setTimeout( moveDimPanelToTop, 2500 );
+    }() );
+
     // 편집기 로드 후 "글" 탭(Document panel)을 기본으로 표시
     (function () {
         var done = false;
